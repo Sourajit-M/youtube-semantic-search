@@ -1,0 +1,8 @@
+FAILED TRANSCRIPT EXTRACTIONS
+Total Failed: 1
+============================================================
+
+1. Video ID: SkSItIS_Xl0
+   Title: What is sex?: Sex Ed #1
+   Error: Request timeout
+
