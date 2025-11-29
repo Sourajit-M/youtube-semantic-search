@@ -1,208 +1,264 @@
+# scripts/extract_videos.py
+"""
+STEP 1: Extract complete video metadata for CrashCourse (or any channel)
+
+- Uses channel's 'uploads' playlist to get ALL public uploads
+- Fetches:
+    id, title, description, publishedAt, tags, categoryId,
+    defaultLanguage, defaultAudioLanguage,
+    thumbnail_default, thumbnail_high,
+    duration, viewCount, likeCount, commentCount, privacyStatus,
+    channel_id, channel_title,
+    channel_description, channel_country, channel_thumbnail,
+    channel_subscriberCount, channel_videoCount
+
+Output:
+    data/crashcourse_metadata.csv
+"""
+
 import os
+import sys
 import time
-from typing import List, Dict
+import argparse
+from pathlib import Path
 
 import pandas as pd
 from googleapiclient.discovery import build
-from dotenv import load_dotenv
 
-load_dotenv()
-
-API_KEY = os.getenv("API_KEY")
-CHANNEL_ID = os.getenv("CHANNEL_ID")  # CrashCourse
-
-# Number of most recent videos to keep
-MAX_VIDEOS = 50   # change to 300/350 if you want
-
-if not API_KEY:
-    raise RuntimeError("GOOGLE_API_KEY not set in .env")
-if not CHANNEL_ID:
-    raise RuntimeError("YOUTUBE_CHANNEL_ID not set in .env")
-
-youtube = build("youtube", "v3", developerKey=API_KEY)
+# Allow import of config from project root
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.append(str(ROOT_DIR))
+from config import YOUTUBE_API_KEY, CHANNEL_ID  # type: ignore
 
 
-def get_channel_info(channel_id: str) -> Dict:
-    """Get basic channel info and uploads playlist ID."""
-    req = youtube.channels().list(
-        part="snippet,statistics,contentDetails",
-        id=channel_id,
-    )
-    resp = req.execute()
-    if not resp["items"]:
+# --------------------------------------------------------------------
+# Helper: YouTube client
+# --------------------------------------------------------------------
+def get_youtube():
+    if not YOUTUBE_API_KEY:
+        raise RuntimeError("YOUTUBE_API_KEY is not set.")
+    return build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
+
+
+# --------------------------------------------------------------------
+# 1) Get uploads playlist ID
+# --------------------------------------------------------------------
+def get_uploads_playlist_id(youtube, channel_id: str) -> str:
+    resp = youtube.channels().list(
+        part="contentDetails",
+        id=channel_id
+    ).execute()
+
+    items = resp.get("items", [])
+    if not items:
         raise RuntimeError(f"No channel found for id={channel_id}")
 
-    item = resp["items"][0]
-    uploads_playlist_id = item["contentDetails"]["relatedPlaylists"]["uploads"]
-
-    info = {
-        "channel_title": item["snippet"]["title"],
-        "channel_description": item["snippet"]["description"],
-        "channel_country": item["snippet"].get("country", "N/A"),
-        "channel_subscriberCount": int(item["statistics"].get("subscriberCount", 0)),
-        "channel_videoCount": int(item["statistics"].get("videoCount", 0)),
-        "uploads_playlist_id": uploads_playlist_id,
-    }
-    return info
+    uploads_playlist_id = items[0]["contentDetails"]["relatedPlaylists"]["uploads"]
+    print(f"Uploads playlist ID: {uploads_playlist_id}")
+    return uploads_playlist_id
 
 
-def fetch_from_uploads_playlist(playlist_id: str, max_videos: int) -> List[Dict]:
-    """Fetch videos from the uploads playlist (oldest → newest, we’ll sort later)."""
-    videos: List[Dict] = []
+# --------------------------------------------------------------------
+# 2) Get video IDs from uploads playlist
+# --------------------------------------------------------------------
+def get_video_ids(youtube, channel_id: str, target_count: int = 250):
+    print("Step 1: Fetching video IDs from uploads playlist...")
+
+    uploads_playlist_id = get_uploads_playlist_id(youtube, channel_id)
+
+    video_ids = []
     next_page_token = None
-    page = 0
 
-    while True:
-        if max_videos and len(videos) >= max_videos:
-            break
-
+    while len(video_ids) < target_count:
         req = youtube.playlistItems().list(
-            part="snippet,contentDetails",
-            playlistId=playlist_id,
+            part="contentDetails",
+            playlistId=uploads_playlist_id,
             maxResults=50,
             pageToken=next_page_token,
         )
-        resp = req.execute()
-        page += 1
+        res = req.execute()
 
-        ids = []
-        for item in resp.get("items", []):
+        for item in res.get("items", []):
             vid = item["contentDetails"]["videoId"]
-            ids.append(vid)
+            video_ids.append(vid)
 
-        if not ids:
+        print(f"  Collected {len(video_ids)} video IDs...", end="\r")
+
+        if len(video_ids) >= target_count:
             break
 
-        # Get detailed stats for these IDs
-        vids_req = youtube.videos().list(
-            part="snippet,contentDetails,statistics,status",
-            id=",".join(ids),
-        )
-        vids_resp = vids_req.execute()
-
-        for item in vids_resp.get("items", []):
-            if max_videos and len(videos) >= max_videos:
-                break
-
-            s = item["snippet"]
-            cd = item["contentDetails"]
-            st = item["statistics"]
-            status = item["status"]
-
-            videos.append(
-                {
-                    "id": item["id"],
-                    "title": s.get("title", ""),
-                    "description": s.get("description", ""),
-                    "publishedAt": s.get("publishedAt"),
-                    "tags": ", ".join(s.get("tags", [])),
-                    "categoryId": s.get("categoryId", ""),
-                    "defaultLanguage": s.get("defaultLanguage", "en"),
-                    "defaultAudioLanguage": s.get("defaultAudioLanguage", "en"),
-                    "thumbnail_default": s.get("thumbnails", {})
-                    .get("default", {})
-                    .get("url", ""),
-                    "thumbnail_high": s.get("thumbnails", {})
-                    .get("high", {})
-                    .get("url", ""),
-                    "duration": cd.get("duration", ""),
-                    "viewCount": int(st.get("viewCount", 0)),
-                    "likeCount": int(st.get("likeCount", 0)),
-                    "commentCount": int(st.get("commentCount", 0)),
-                    "privacyStatus": status.get("privacyStatus", ""),
-                }
-            )
-
-        print(f"Page {page}: fetched {len(ids)} videos | total so far = {len(videos)}")
-
-        next_page_token = resp.get("nextPageToken")
+        next_page_token = res.get("nextPageToken")
         if not next_page_token:
-            break
-
-        if max_videos and len(videos) >= max_videos:
             break
 
         time.sleep(0.2)
 
-    return videos
+    video_ids = video_ids[:target_count]
+    print(f"\nCollected {len(video_ids)} video IDs\n")
+    return video_ids
 
 
-def parse_duration(duration: str) -> int:
-    """Convert ISO8601 duration to seconds."""
-    import re
+# --------------------------------------------------------------------
+# 3) Get full video metadata via videos.list
+# --------------------------------------------------------------------
+def get_video_details(youtube, video_ids):
+    print("Step 2: Fetching complete metadata...")
 
-    match = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", duration)
-    if match:
-        h = int(match.group(1) or 0)
-        m = int(match.group(2) or 0)
-        s = int(match.group(3) or 0)
-        return h * 3600 + m * 60 + s
-    return 0
+    all_rows = []
+
+    for i in range(0, len(video_ids), 50):
+        batch = video_ids[i:i + 50]
+
+        req = youtube.videos().list(
+            part="snippet,contentDetails,statistics,status",
+            id=",".join(batch)
+        )
+        res = req.execute()
+
+        for item in res.get("items", []):
+            snip = item.get("snippet", {})
+            stats = item.get("statistics", {})
+            content = item.get("contentDetails", {})
+            status = item.get("status", {})
+
+            row = {
+                "id": item.get("id"),
+                "title": snip.get("title"),
+                "description": snip.get("description"),
+                "publishedAt": snip.get("publishedAt"),
+                "tags": ", ".join(snip.get("tags", [])),
+                "categoryId": snip.get("categoryId"),
+                "defaultLanguage": snip.get("defaultLanguage", ""),
+                "defaultAudioLanguage": snip.get("defaultAudioLanguage", ""),
+                "thumbnail_default": snip.get("thumbnails", {}).get("default", {}).get("url"),
+                "thumbnail_high": snip.get("thumbnails", {}).get("high", {}).get("url"),
+                "duration": content.get("duration"),
+                "viewCount": int(stats.get("viewCount", 0)) if stats.get("viewCount") is not None else 0,
+                "likeCount": int(stats.get("likeCount", 0)) if stats.get("likeCount") is not None else 0,
+                "commentCount": int(stats.get("commentCount", 0)) if stats.get("commentCount") is not None else 0,
+                "privacyStatus": status.get("privacyStatus", ""),
+                "channel_id": snip.get("channelId"),
+                "channel_title": snip.get("channelTitle"),
+                # channel_* fields will be filled later
+                "channel_description": None,
+                "channel_country": None,
+                "channel_thumbnail": None,
+                "channel_subscriberCount": None,
+                "channel_videoCount": None,
+            }
+            all_rows.append(row)
+
+        print(f"  Processed {len(all_rows)}/{len(video_ids)} videos...", end="\r")
+        time.sleep(0.2)
+
+    print(f"\nFetched metadata for {len(all_rows)} videos\n")
+    return pd.DataFrame(all_rows)
 
 
-def process_video_data(videos, channel_info):
-    df = pd.DataFrame(videos)
+# --------------------------------------------------------------------
+# 4) Enrich channel metadata
+# --------------------------------------------------------------------
+def enrich_channel_details(youtube, df: pd.DataFrame) -> pd.DataFrame:
+    print("Step 3: Enriching channel metadata...")
 
-    # add channel info
-    df["channel_id"] = CHANNEL_ID
-    df["channel_title"] = channel_info["channel_title"]
-    df["channel_description"] = channel_info["channel_description"]
-    df["channel_country"] = channel_info["channel_country"]
-    df["channel_subscriberCount"] = channel_info["channel_subscriberCount"]
-    df["channel_videoCount"] = channel_info["channel_videoCount"]
+    unique_channels = df["channel_id"].dropna().unique()
+    if len(unique_channels) == 0:
+        print("No channel IDs found in data.")
+        return df
 
-    # convert dates
-    df["publishedAt"] = pd.to_datetime(df["publishedAt"])
-    df["publish_date"] = df["publishedAt"].dt.date
-    df["publish_year"] = df["publishedAt"].dt.year
+    channel_info = {}
 
-    # durations
-    df["duration_seconds"] = df["duration"].apply(parse_duration)
-    df["duration_minutes"] = df["duration_seconds"] / 60
+    for i in range(0, len(unique_channels), 50):
+        chunk = unique_channels[i:i + 50]
+        req = youtube.channels().list(
+            part="snippet,statistics",
+            id=",".join(chunk)
+        )
+        res = req.execute()
 
-    # url
-    df["video_url"] = "https://www.youtube.com/watch?v=" + df["id"].astype(str)
+        for ch in res.get("items", []):
+            snip = ch.get("snippet", {})
+            stats = ch.get("statistics", {})
+            channel_info[ch["id"]] = {
+                "channel_description": snip.get("description"),
+                "channel_country": snip.get("country"),
+                "channel_thumbnail": snip.get("thumbnails", {}).get("high", {}).get("url"),
+                "channel_subscriberCount": int(stats.get("subscriberCount", 0)) if stats.get("subscriberCount") is not None else 0,
+                "channel_videoCount": int(stats.get("videoCount", 0)) if stats.get("videoCount") is not None else 0,
+            }
 
-    # sort newest first
-    df = df.sort_values("publishedAt", ascending=False).reset_index(drop=True)
+        time.sleep(0.2)
 
-    print("DATASET SUMMARY")
-    print(f"Total videos: {len(df)}")
-    print(f"Date range: {df['publish_date'].min()} → {df['publish_date'].max()}")
-    print(f"Total views: {df['viewCount'].sum():,}")
-    print(f"Avg views/video: {df['viewCount'].mean():,.0f}")
-    print(f"Avg duration: {df['duration_minutes'].mean():.1f} minutes")
+    for ch_id, info in channel_info.items():
+        for col, val in info.items():
+            df.loc[df["channel_id"] == ch_id, col] = val
 
+    print("Channel metadata enriched\n")
     return df
 
 
+# --------------------------------------------------------------------
+# 5) Summary + save
+# --------------------------------------------------------------------
+def display_summary(df: pd.DataFrame):
+    print("DATASET SUMMARY")
+
+    df["publishedAt"] = pd.to_datetime(df["publishedAt"])
+
+    print(f"\nTotal Videos: {len(df)}")
+    print(f"Columns: {len(df.columns)}")
+    print(f"Date Range: {df['publishedAt'].min().date()} to {df['publishedAt'].max().date()}")
+
+    print(f"\nAll Columns ({len(df.columns)}):")
+    for i, col in enumerate(df.columns, 1):
+        print(f"  {i:2d}. {col}")
+
+    print("\nSample Videos (First 3):")
+    for idx, row in df.head(3).iterrows():
+        print(f"\n{idx+1}. {row['title'][:60]}...")
+        print(f"   ID: {row['id']}")
+        print(f"   Views: {row['viewCount']:,} | Likes: {row['likeCount']:,}")
+        print(f"   Duration: {row['duration']} | Date: {row['publishedAt'].date()}")
+
+
+def save_metadata(df: pd.DataFrame, output_path: Path):
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(output_path, index=False)
+    print(f"Metadata saved to: {output_path}")
+
+
+# --------------------------------------------------------------------
 # MAIN
+# --------------------------------------------------------------------
+def main():
+    parser = argparse.ArgumentParser(description="Extract complete CrashCourse video metadata")
+    parser.add_argument("--channel-id", default=CHANNEL_ID, help="YouTube channel ID")
+    parser.add_argument("--max-videos", type=int, default=250, help="Max videos to fetch")
+    parser.add_argument("--output", default="data/crashcourse_metadata.csv", help="Output CSV path")
+    args = parser.parse_args()
+
+    print("CRASHCOURSE COMPLETE METADATA EXTRACTION")
+
+    youtube = get_youtube()
+
+    video_ids = get_video_ids(youtube, args.channel_id, args.max_videos)
+    if not video_ids:
+        print("No video IDs fetched.")
+        return
+
+    df = get_video_details(youtube, video_ids)
+    if df.empty:
+        print("No metadata extracted.")
+        return
+
+    df = enrich_channel_details(youtube, df)
+    display_summary(df)
+    save_metadata(df, Path(args.output))
+
+    print("\nCOMPLETE!")
+    print(f"-Extracted {len(df)} videos with {len(df.columns)} columns")
+    print("\nNext: run scripts/extract_transcripts.py to add transcripts.\n")
+
 
 if __name__ == "__main__":
-    print("YOUTUBE VIDEO METADATA EXTRACTION")
-    print("Channel: CrashCourse")
-
-    info = get_channel_info(CHANNEL_ID)
-    print(f"Channel: {info['channel_title']}")
-    print(f"Total videos reported: {info['channel_videoCount']}")
-    print(f"Subscribers: {info['channel_subscriberCount']:,}")
-    print(f"Uploads playlist: {info['uploads_playlist_id']}\n")
-
-    video_list = fetch_from_uploads_playlist(
-        info["uploads_playlist_id"],
-        max_videos=MAX_VIDEOS,
-    )
-
-    if not video_list:
-        print("No videos fetched.")
-    else:
-        df = process_video_data(video_list, info)
-
-        os.makedirs("data", exist_ok=True)
-        out_path = "data/crashcourse_videos.csv"
-        df.to_csv(out_path, index=False, encoding="utf-8")
-        print(f"\n✓ Data saved to: {out_path}")
-        print("\nSample:")
-        print(df[["id", "title", "publish_date"]].head())
-        
-    print("EXTRACTION COMPLETE!")
+    main()

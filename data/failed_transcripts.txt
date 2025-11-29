@@ -1,8 +1,249 @@
 FAILED TRANSCRIPT EXTRACTIONS
-Total Failed: 1
-============================================================
+======================================================================
 
-1. Video ID: SkSItIS_Xl0
-   Title: What is sex?: Sex Ed #1
-   Error: Request timeout
+Total Failed: 61
 
+Video ID: SkSItIS_Xl0
+Title: What is sex?: Sex Ed #1
+URL: https://www.youtube.com/watch?v=SkSItIS_Xl0
+----------------------------------------------------------------------
+Video ID: Z38LrPadz3Y
+Title: Are Science and Religion Compatible?: Crash Course Religions #19
+URL: https://www.youtube.com/watch?v=Z38LrPadz3Y
+----------------------------------------------------------------------
+Video ID: eWQrjBoT8BA
+Title: Religions of the African Diaspora: Crash Course Religions #11
+URL: https://www.youtube.com/watch?v=eWQrjBoT8BA
+----------------------------------------------------------------------
+Video ID: crBi4dPUFQc
+Title: What Does Liberalism Mean?
+URL: https://www.youtube.com/watch?v=crBi4dPUFQc
+----------------------------------------------------------------------
+Video ID: vpQyrDs0Tmo
+Title: The History and Practice of Islam on Earth and Beyond: Crash Course Religions #10
+URL: https://www.youtube.com/watch?v=vpQyrDs0Tmo
+----------------------------------------------------------------------
+Video ID: qz2-X1LrOPg
+Title: Where Did Democracy Come From, and Does It Still Work?
+URL: https://www.youtube.com/watch?v=qz2-X1LrOPg
+----------------------------------------------------------------------
+Video ID: y8xyZbbSWWg
+Title: Sacrifice, Redemption, and Miracles: The Story of Christianity: Crash Course Religions #9
+URL: https://www.youtube.com/watch?v=y8xyZbbSWWg
+----------------------------------------------------------------------
+Video ID: LU7flL6Q0f8
+Title: Crash Course Political Theory Preview
+URL: https://www.youtube.com/watch?v=LU7flL6Q0f8
+----------------------------------------------------------------------
+Video ID: g9b48p9NaYc
+Title: What Does it Mean to Be Jewish: Crash Course Religions #8
+URL: https://www.youtube.com/watch?v=g9b48p9NaYc
+----------------------------------------------------------------------
+Video ID: 52dfLZFY_sY
+Title: Can a River Be A Person? | Indigenous Traditions: Crash Course Religions #7
+URL: https://www.youtube.com/watch?v=52dfLZFY_sY
+----------------------------------------------------------------------
+Video ID: e8FLcGEXsO0
+Title: Life, the Universe, and the Buddha: Crash Course Religions #6
+URL: https://www.youtube.com/watch?v=e8FLcGEXsO0
+----------------------------------------------------------------------
+Video ID: Yw-1HeEIf5M
+Title: The Infinite Stories of Hinduism: Crash Course Religions #5
+URL: https://www.youtube.com/watch?v=Yw-1HeEIf5M
+----------------------------------------------------------------------
+Video ID: 68WPYhpIWx4
+Title: What’s the Difference Between Religion and Magic? | Crash Course Religions #4
+URL: https://www.youtube.com/watch?v=68WPYhpIWx4
+----------------------------------------------------------------------
+Video ID: eTlGeL6Yeas
+Title: What is the Future of Art?
+URL: https://www.youtube.com/watch?v=eTlGeL6Yeas
+----------------------------------------------------------------------
+Video ID: 6Pn2enNmtFI
+Title: What's the Difference Between Cults and Religion?: Crash Course Religions #3
+URL: https://www.youtube.com/watch?v=6Pn2enNmtFI
+----------------------------------------------------------------------
+Video ID: ttlLyA-WEcc
+Title: The Importance of Preserving, Restoring, & Conserving Art
+URL: https://www.youtube.com/watch?v=ttlLyA-WEcc
+----------------------------------------------------------------------
+Video ID: GxGe4oIiPcE
+Title: How Many Religions Are There?: Crash Course Religions #2
+URL: https://www.youtube.com/watch?v=GxGe4oIiPcE
+----------------------------------------------------------------------
+Video ID: Rxms0gWUmMs
+Title: Is AI-Generated Art Original? (Authenticity & Originality)
+URL: https://www.youtube.com/watch?v=Rxms0gWUmMs
+----------------------------------------------------------------------
+Video ID: KHhM8WIlijc
+Title: Why Is Everyone So Mad About Public Art?
+URL: https://www.youtube.com/watch?v=KHhM8WIlijc
+----------------------------------------------------------------------
+Video ID: VbfIGVhRups
+Title: How a Banana Sold for $150,000 : Modern Art
+URL: https://www.youtube.com/watch?v=VbfIGVhRups
+----------------------------------------------------------------------
+Video ID: KGYy7UBf3mQ
+Title: Who Gets to Be a "Real" Artist? (Amateur & Outsider Art): Crash Course Art History #13
+URL: https://www.youtube.com/watch?v=KGYy7UBf3mQ
+----------------------------------------------------------------------
+Video ID: SyHM1gFyP8Y
+Title: Biology and You: The Dr. Sammy Show: Crash Course Biology #50
+URL: https://www.youtube.com/watch?v=SyHM1gFyP8Y
+----------------------------------------------------------------------
+Video ID: 9R_6FoM1cog
+Title: Animal Behavior: Why This Toad Is Bad at Jumping: Crash Course Biology #49
+URL: https://www.youtube.com/watch?v=9R_6FoM1cog
+----------------------------------------------------------------------
+Video ID: Z21elmpg-W0
+Title: The Hidden Meanings in Nature Art: Crash Course Art History #9
+URL: https://www.youtube.com/watch?v=Z21elmpg-W0
+----------------------------------------------------------------------
+Video ID: HCWzzZFCwag
+Title: How Do Religions Use Art?: Crash Course Art History #8
+URL: https://www.youtube.com/watch?v=HCWzzZFCwag
+----------------------------------------------------------------------
+Video ID: Nb6oWRnvBDw
+Title: Animal Defense Systems: How Skin, Snot, and Cells Keep Us Healthy: Crash Course Biology #45
+URL: https://www.youtube.com/watch?v=Nb6oWRnvBDw
+----------------------------------------------------------------------
+Video ID: gAWYROgu4JU
+Title: Animal Infrastructure: Why You’re More Than Goo: Crash Course Biology #44
+URL: https://www.youtube.com/watch?v=gAWYROgu4JU
+----------------------------------------------------------------------
+Video ID: kjZAHBMMKoU
+Title: How Animals Turn Resources Into Waste: The Poop Episode: Crash Course Biology #43
+URL: https://www.youtube.com/watch?v=kjZAHBMMKoU
+----------------------------------------------------------------------
+Video ID: rT6QV0dWJG4
+Title: What Makes an Artist “Great”? : Crash Course Art History #4
+URL: https://www.youtube.com/watch?v=rT6QV0dWJG4
+----------------------------------------------------------------------
+Video ID: pvVvCt6Kdp8
+Title: Plant Anatomy & Physiology: Plants Are Hardcore: Crash Course Biology #42
+URL: https://www.youtube.com/watch?v=pvVvCt6Kdp8
+----------------------------------------------------------------------
+Video ID: 5dF11sRMWo4
+Title: Multicellular Function: Why We Aren’t Just One Big Cell: Crash Course Biology #41
+URL: https://www.youtube.com/watch?v=5dF11sRMWo4
+----------------------------------------------------------------------
+Video ID: o-WFU5ovaTc
+Title: Bioinformatics: How Data Saves Lives: Crash Course Biology #40
+URL: https://www.youtube.com/watch?v=o-WFU5ovaTc
+----------------------------------------------------------------------
+Video ID: xSbMX0MFJCY
+Title: Viruses & Vaccines: How Do Vaccines Work?: Crash Course Biology 39
+URL: https://www.youtube.com/watch?v=xSbMX0MFJCY
+----------------------------------------------------------------------
+Video ID: t6Wc7OMks4U
+Title: Why We Study Art: Crash Course Art History #1
+URL: https://www.youtube.com/watch?v=t6Wc7OMks4U
+----------------------------------------------------------------------
+Video ID: T6RJUzuVq4w
+Title: Crash Course Art History Preview
+URL: https://www.youtube.com/watch?v=T6RJUzuVq4w
+----------------------------------------------------------------------
+Video ID: 8HfzUgxumVE
+Title: Genetic Mutations: Is Drinking Milk a Super Power?: Crash Course Biology #37
+URL: https://www.youtube.com/watch?v=8HfzUgxumVE
+----------------------------------------------------------------------
+Video ID: NeeaP8pp9HI
+Title: How Genes Express Themselves: Crash Course Biology #36
+URL: https://www.youtube.com/watch?v=NeeaP8pp9HI
+----------------------------------------------------------------------
+Video ID: 7D-gxaie6UI
+Title: The Deadliest Infectious Disease of All Time | Crash Course Lecture
+URL: https://www.youtube.com/watch?v=7D-gxaie6UI
+----------------------------------------------------------------------
+Video ID: 6ulXau2HyHg
+Title: Translation: How RNA Gets Translated into Protein Power: Crash Course Biology #35
+URL: https://www.youtube.com/watch?v=6ulXau2HyHg
+----------------------------------------------------------------------
+Video ID: 9zwq8N4Ufd8
+Title: Genetic Traits: Nature? Nurture? Not That Simple: Crash Course Biology #32
+URL: https://www.youtube.com/watch?v=9zwq8N4Ufd8
+----------------------------------------------------------------------
+Video ID: YnJPbphsoMY
+Title: Intro to Genetics: Why Your Cat Looks Like That: Crash Course Biology #31
+URL: https://www.youtube.com/watch?v=YnJPbphsoMY
+----------------------------------------------------------------------
+Video ID: pj1oFx42d48
+Title: Meiosis: Why Are All Humans Unique?: Crash Course Biology #30
+URL: https://www.youtube.com/watch?v=pj1oFx42d48
+----------------------------------------------------------------------
+Video ID: skPOXcVvS5c
+Title: Mitosis & the Cell Cycle: How Cells Clone Themselves: Crash Course Biology #29
+URL: https://www.youtube.com/watch?v=skPOXcVvS5c
+----------------------------------------------------------------------
+Video ID: -ZRsLhaukn8
+Title: Photosynthesis: The Original Solar Power: Crash Course Biology #28
+URL: https://www.youtube.com/watch?v=-ZRsLhaukn8
+----------------------------------------------------------------------
+Video ID: HeO3yagexTw
+Title: Cellular Respiration: Do Cells Breathe?: Crash Course Biology #27
+URL: https://www.youtube.com/watch?v=HeO3yagexTw
+----------------------------------------------------------------------
+Video ID: 62cN8Z5Velo
+Title: Chemical Reactions in Biology: Crash Course Biology #26
+URL: https://www.youtube.com/watch?v=62cN8Z5Velo
+----------------------------------------------------------------------
+Video ID: p15KSbNxb28
+Title: Why Do Cells Need to Communicate?: Crash Course Biology #25
+URL: https://www.youtube.com/watch?v=p15KSbNxb28
+----------------------------------------------------------------------
+Video ID: 9Ia8zH-qMZw
+Title: Cell Membranes: How Does Stuff Get Into Your Cells?: Crash Course Biology #24
+URL: https://www.youtube.com/watch?v=9Ia8zH-qMZw
+----------------------------------------------------------------------
+Video ID: jsDxw63QqK0
+Title: A Tour of the Cell: Crash Course Biology #23
+URL: https://www.youtube.com/watch?v=jsDxw63QqK0
+----------------------------------------------------------------------
+Video ID: Aa1dGBKgGVc
+Title: Biological Diversity, Butts, and the Tree of Life: Crash Course Biology #18
+URL: https://www.youtube.com/watch?v=Aa1dGBKgGVc
+----------------------------------------------------------------------
+Video ID: 4joZpdXeS4A
+Title: Population Genetics: Why do we have different skin colors?: Crash Course Biology #14
+URL: https://www.youtube.com/watch?v=4joZpdXeS4A
+----------------------------------------------------------------------
+Video ID: i-VeKZeyHZs
+Title: Natural Selection: Life's Way of Stayin' Alive: Crash Course Biology #13
+URL: https://www.youtube.com/watch?v=i-VeKZeyHZs
+----------------------------------------------------------------------
+Video ID: fBOrzQP423A
+Title: Microevolution: What's An Allele Got to Do With It?: Crash Course Biology #12
+URL: https://www.youtube.com/watch?v=fBOrzQP423A
+----------------------------------------------------------------------
+Video ID: oZtUFJAJ3lU
+Title: How We ALL Get Our Energy (Plants & Ecosystems): Crash Course Botany #13
+URL: https://www.youtube.com/watch?v=oZtUFJAJ3lU
+----------------------------------------------------------------------
+Video ID: HsAUGbUgx6Y
+Title: The Effects of Climate Change: Crash Course Biology #9
+URL: https://www.youtube.com/watch?v=HsAUGbUgx6Y
+----------------------------------------------------------------------
+Video ID: 5ryUVuISxzg
+Title: GMOs are Nothing New: Plant Breeding & Gene Editing: Crash Course Botany #11
+URL: https://www.youtube.com/watch?v=5ryUVuISxzg
+----------------------------------------------------------------------
+Video ID: Ox4bHA9fGGY
+Title: What Do Pea Plants Have To Do With Your Eye Color? (Mendelian Genetics): Crash Course Botany #10
+URL: https://www.youtube.com/watch?v=Ox4bHA9fGGY
+----------------------------------------------------------------------
+Video ID: usKrCTtArNc
+Title: Why Don't These Plants Need Seeds? (Moss and Ferns): Crash Course Botany #8
+URL: https://www.youtube.com/watch?v=usKrCTtArNc
+----------------------------------------------------------------------
+Video ID: WzOrF5W4l3Q
+Title: Photosynthesis and Cellular Respiration: Crash Course Botany #5
+URL: https://www.youtube.com/watch?v=WzOrF5W4l3Q
+----------------------------------------------------------------------
+Video ID: y9BLCfcUcFg
+Title: Plant Cells & Hormones: Crash Course Botany #3
+URL: https://www.youtube.com/watch?v=y9BLCfcUcFg
+----------------------------------------------------------------------
+Video ID: 9AEzixu_xZk
+Title: What Are Plants Made Of? Crash Course Botany #2
+URL: https://www.youtube.com/watch?v=9AEzixu_xZk
+----------------------------------------------------------------------
