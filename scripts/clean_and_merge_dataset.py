@@ -101,96 +101,92 @@ def merge_and_clean_datasets(videos_path, metadata_path, output_path):
     
     Args:
         videos_path: Path to crashcourse_videos.csv (with transcripts)
-        metadata_path: Path to crashcourse_metadata.csv (without transcripts)
+        metadata_path: Path to crashcourse_metadata.csv (without transcripts) - optional
         output_path: Path to save the cleaned merged dataset
     """
+    # Get relative paths for display
+    try:
+        videos_rel = videos_path.relative_to(Path.cwd())
+        output_rel = output_path.relative_to(Path.cwd())
+    except ValueError:
+        videos_rel = videos_path.name
+        output_rel = output_path.name
+    
     print("=" * 70)
     print("YOUTUBE DATASET CLEANING AND MERGING")
     print("=" * 70)
     
     # Load datasets
-    print("\n1. Loading datasets...")
+    print("\n[1/6] Loading datasets...")
     df_videos = pd.read_csv(videos_path)
-    df_metadata = pd.read_csv(metadata_path)
+    print(f"   ✓ Loaded {len(df_videos)} videos with {len(df_videos.columns)} columns")
     
-    print(f"   Videos dataset: {len(df_videos)} rows, {len(df_videos.columns)} columns")
-    print(f"   Metadata dataset: {len(df_metadata)} rows, {len(df_metadata.columns)} columns")
+    # Check if metadata file exists (optional)
+    if metadata_path.exists():
+        df_metadata = pd.read_csv(metadata_path)
+        print(f"   ✓ Loaded metadata: {len(df_metadata)} rows")
+    else:
+        print(f"   ℹ Metadata file not found (using videos dataset only)")
     
-    # Merge datasets on 'id' column
-    print("\n2. Merging datasets...")
-    # Use videos dataset as base (has transcripts)
-    # Left join to keep all videos with transcripts
+    # Use videos dataset as base
+    print("\n[2/6] Preparing dataset...")
     df_merged = df_videos.copy()
-    
-    print(f"   Merged dataset: {len(df_merged)} rows, {len(df_merged.columns)} columns")
+    print(f"   ✓ Working with {len(df_merged)} rows")
     
     # Convert duration to seconds
-    print("\n3. Converting duration to seconds...")
+    print("\n[3/6] Converting duration to seconds...")
     df_merged['duration_seconds'] = df_merged['duration'].apply(parse_duration_to_seconds)
-    print(f"   Sample conversions:")
-    for idx in range(min(3, len(df_merged))):
-        orig = df_merged.iloc[idx]['duration']
-        converted = df_merged.iloc[idx]['duration_seconds']
-        print(f"      {orig} -> {converted} seconds")
+    print(f"   ✓ Converted {len(df_merged)} duration values")
     
     # Clean text fields
-    print("\n4. Cleaning text fields...")
+    print("\n[4/6] Cleaning text fields...")
     text_columns = ['title', 'description', 'transcript']
     
     for col in text_columns:
         if col in df_merged.columns:
-            print(f"   Cleaning '{col}'...")
             df_merged[f'{col}_cleaned'] = df_merged[col].apply(clean_text)
-            
-            # Show sample
-            if len(df_merged) > 0:
-                sample_orig = str(df_merged.iloc[0][col])[:100]
-                sample_clean = str(df_merged.iloc[0][f'{col}_cleaned'])[:100]
-                print(f"      Original: {sample_orig}...")
-                print(f"      Cleaned:  {sample_clean}...")
+            print(f"   ✓ Cleaned '{col}' column")
     
     # Convert other text fields to lowercase
-    print("\n5. Converting remaining text fields to lowercase...")
+    print("\n[5/6] Converting text to lowercase...")
     other_text_cols = ['tags', 'defaultLanguage', 'defaultAudioLanguage', 
                        'channel_title', 'channel_description']
     
+    converted_count = 0
     for col in other_text_cols:
         if col in df_merged.columns:
             df_merged[col] = df_merged[col].apply(
                 lambda x: x.lower() if isinstance(x, str) else x
             )
+            converted_count += 1
+    print(f"   ✓ Converted {converted_count} additional text columns")
     
     # Save cleaned dataset
-    print(f"\n6. Saving cleaned dataset to {output_path}...")
+    print(f"\n[6/6] Saving cleaned dataset...")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df_merged.to_csv(output_path, index=False)
+    print(f"   ✓ Saved to: {output_rel}")
     
     # Display summary
     print("\n" + "=" * 70)
-    print("CLEANING SUMMARY")
+    print("SUMMARY")
     print("=" * 70)
-    print(f"\nFinal dataset:")
-    print(f"  Total rows: {len(df_merged)}")
-    print(f"  Total columns: {len(df_merged.columns)}")
-    print(f"\nNew columns added:")
-    print(f"  - duration_seconds: Converted from ISO 8601 format")
-    print(f"  - title_cleaned: Lowercase, special chars removed")
-    print(f"  - description_cleaned: Lowercase, special chars removed")
-    print(f"  - transcript_cleaned: Lowercase, special chars removed")
+    print(f"\n📊 Dataset Statistics:")
+    print(f"   • Total videos: {len(df_merged)}")
+    print(f"   • Total columns: {len(df_merged.columns)}")
     
-    print(f"\nDuration statistics:")
-    print(f"  Mean: {df_merged['duration_seconds'].mean():.0f} seconds")
-    print(f"  Min: {df_merged['duration_seconds'].min()} seconds")
-    print(f"  Max: {df_merged['duration_seconds'].max()} seconds")
+    print(f"\n🆕 New Columns:")
+    print(f"   • duration_seconds (converted from ISO 8601)")
+    print(f"   • title_cleaned (lowercase, special chars removed)")
+    print(f"   • description_cleaned (lowercase, special chars removed)")
+    print(f"   • transcript_cleaned (lowercase, special chars removed)")
     
-    print(f"\nSample cleaned data (first row):")
-    print(f"  ID: {df_merged.iloc[0]['id']}")
-    print(f"  Title (cleaned): {df_merged.iloc[0]['title_cleaned'][:80]}...")
-    print(f"  Duration: {df_merged.iloc[0]['duration']} -> {df_merged.iloc[0]['duration_seconds']} seconds")
+    print(f"\n⏱️  Duration Statistics:")
+    print(f"   • Average: {df_merged['duration_seconds'].mean():.0f}s ({df_merged['duration_seconds'].mean()/60:.1f} min)")
+    print(f"   • Range: {df_merged['duration_seconds'].min()}s - {df_merged['duration_seconds'].max()}s")
     
     print("\n" + "=" * 70)
     print("✅ CLEANING COMPLETE!")
-    print(f"   Cleaned dataset saved to: {output_path}")
     print("=" * 70 + "\n")
     
     return df_merged
