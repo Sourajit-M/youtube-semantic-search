@@ -138,13 +138,14 @@ def merge_and_clean_datasets(videos_path, metadata_path, output_path):
     df_merged['duration_seconds'] = df_merged['duration'].apply(parse_duration_to_seconds)
     print(f"   ✓ Converted {len(df_merged)} duration values")
     
-    # Clean text fields
+    # Clean text fields and replace originals
     print("\n[4/6] Cleaning text fields...")
     text_columns = ['title', 'description', 'transcript']
     
     for col in text_columns:
         if col in df_merged.columns:
-            df_merged[f'{col}_cleaned'] = df_merged[col].apply(clean_text)
+            # Clean the text and replace the original column
+            df_merged[col] = df_merged[col].apply(clean_text)
             print(f"   ✓ Cleaned '{col}' column")
     
     # Convert other text fields to lowercase
@@ -161,8 +162,26 @@ def merge_and_clean_datasets(videos_path, metadata_path, output_path):
             converted_count += 1
     print(f"   ✓ Converted {converted_count} additional text columns")
     
+    # Select only required columns
+    print(f"\n[6/6] Selecting required columns and saving...")
+    
+    # Columns to keep (as specified by user)
+    required_cols = [
+        'id', 'title', 'description', 'publishedAt', 'tags', 'categoryId',
+        'defaultLanguage', 'defaultAudioLanguage', 'thumbnail_default', 'thumbnail_high',
+        'duration_seconds', 'viewCount', 'likeCount', 'commentCount', 'privacyStatus',
+        'channel_id', 'channel_title', 'channel_description', 'channel_country',
+        'channel_thumbnail', 'channel_subscriberCount', 'channel_videoCount',
+        'transcript'  # Keep cleaned transcript
+    ]
+    
+    # Filter to only columns that exist in the dataframe
+    final_cols = [col for col in required_cols if col in df_merged.columns]
+    df_merged = df_merged[final_cols]
+    
+    print(f"   ✓ Kept {len(final_cols)} columns")
+    
     # Save cleaned dataset
-    print(f"\n[6/6] Saving cleaned dataset...")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df_merged.to_csv(output_path, index=False)
     print(f"   ✓ Saved to: {output_rel}")
@@ -175,15 +194,22 @@ def merge_and_clean_datasets(videos_path, metadata_path, output_path):
     print(f"   • Total videos: {len(df_merged)}")
     print(f"   • Total columns: {len(df_merged.columns)}")
     
-    print(f"\n🆕 New Columns:")
-    print(f"   • duration_seconds (converted from ISO 8601)")
-    print(f"   • title_cleaned (lowercase, special chars removed)")
-    print(f"   • description_cleaned (lowercase, special chars removed)")
-    print(f"   • transcript_cleaned (lowercase, special chars removed)")
+    print(f"\n🆕 Changes Made:")
+    print(f"   • Kept only {len(df_merged.columns)} essential columns")
+    print(f"   • title: Cleaned (lowercase, special chars removed)")
+    print(f"   • description: Cleaned (lowercase, special chars removed)")
+    print(f"   • transcript: Cleaned (lowercase, special chars removed)")
+    print(f"   • duration_seconds: Converted from ISO 8601 to total seconds")
+    
+    print(f"\n📋 Columns Included:")
+    cols_per_line = 3
+    for i in range(0, len(df_merged.columns), cols_per_line):
+        cols_batch = df_merged.columns[i:i+cols_per_line]
+        print(f"   • {', '.join(cols_batch)}")
     
     print(f"\n⏱️  Duration Statistics:")
-    print(f"   • Average: {df_merged['duration_seconds'].mean():.0f}s ({df_merged['duration_seconds'].mean()/60:.1f} min)")
-    print(f"   • Range: {df_merged['duration_seconds'].min()}s - {df_merged['duration_seconds'].max()}s")
+    print(f"   • Average: {df_merged['duration_seconds'].mean():.0f} seconds ({df_merged['duration_seconds'].mean()/60:.1f} minutes)")
+    print(f"   • Range: {df_merged['duration_seconds'].min()}-{df_merged['duration_seconds'].max()} seconds")
     
     print("\n" + "=" * 70)
     print("✅ CLEANING COMPLETE!")
@@ -198,7 +224,7 @@ def main():
     data_dir = ROOT_DIR / "data"
     videos_path = data_dir / "crashcourse_videos.csv"
     metadata_path = data_dir / "crashcourse_metadata.csv"
-    output_path = data_dir / "crashcourse_cleaned.csv"
+    output_path = data_dir / "crashcourse_final.csv"  # Changed to avoid file lock
     
     # Run cleaning and merging
     df_cleaned = merge_and_clean_datasets(videos_path, metadata_path, output_path)
