@@ -23,13 +23,16 @@ def fetch_transcript(video_id: str) -> Optional[str]:
             "--sub-format", "vtt",
             "--skip-download",
             "--js-runtimes", "node",
+            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "--extractor-args", "youtube:player-client=android,web",
             "--quiet",
             "-o", output_template,
             f"https://www.youtube.com/watch?v={video_id}",
         ]
 
         try:
-            subprocess.run(cmd, check=True, capture_output=True, timeout=60)
+            # Increase timeout to 120s for longer videos
+            subprocess.run(cmd, check=True, capture_output=True, timeout=120)
         except subprocess.CalledProcessError as e:
             print(f"yt-dlp failed for {video_id}: {e.stderr.decode()[:200]}")
             return None
