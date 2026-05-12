@@ -21,10 +21,11 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-# Install runtime dependencies (ffmpeg for audio processing, curl for health checks)
+# Install runtime dependencies (ffmpeg for audio processing, curl for health checks, nodejs for yt-dlp)
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
+    nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/.venv /app/.venv 
