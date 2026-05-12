@@ -1,3 +1,12 @@
+---
+title: YouTube RAG Engine
+emoji: ▶
+colorFrom: red
+colorTo: black
+sdk: docker
+pinned: false
+---
+
 # 📺 YouTube RAG Engine
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
