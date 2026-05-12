@@ -2,7 +2,7 @@
 title: YouTube RAG Engine
 emoji: ▶
 colorFrom: red
-colorTo: black
+colorTo: gray
 sdk: docker
 pinned: false
 ---
