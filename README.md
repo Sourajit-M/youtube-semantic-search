@@ -15,8 +15,8 @@ pinned: false
 
 A production-grade Retrieval-Augmented Generation (RAG) system that lets you search and ask questions across any YouTube channel's transcript content.
 
-🔗 **Live Demo:** [your-deployment-url]  
-📖 **API Docs:** [your-deployment-url/docs][cite: 1]
+🔗 **Live Demo:** [https://huggingface.co/spaces/sourajitm19/youtube_rag](https://huggingface.co/spaces/sourajitm19/youtube_rag)  
+📖 **API Docs:** [https://huggingface.co/spaces/sourajitm19/youtube_rag/docs](https://huggingface.co/spaces/sourajitm19/youtube_rag/docs)
 
 ---
 
