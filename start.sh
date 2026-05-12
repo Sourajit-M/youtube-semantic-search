@@ -6,9 +6,9 @@ uvicorn app.api.main:app --host 0.0.0.0 --port 8000 &
 
 # Wait for backend to be ready
 echo "Waiting for API..."
-until $(curl --output /dev/null --silent --head --fail http://localhost:8000/health); do
+while ! curl --silent --fail http://localhost:8000/health > /dev/null; do
     printf '.'
-    sleep 1
+    sleep 2
 done
 echo "API is up!"
 

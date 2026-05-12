@@ -9,6 +9,7 @@ from app.db.vectordb import VectorDB
 router = APIRouter()
 
 @router.get("/health", response_model=HealthResponse)
+@router.head("/health")
 def health_check(session: Session = Depends(get_session)):
     settings = get_settings()
     db = VectorDB()
