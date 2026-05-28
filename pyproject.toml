@@ -21,6 +21,7 @@ dependencies = [
     "streamlit>=1.57.0",
     "uvicorn>=0.46.0",
     "webvtt-py>=0.5.1",
+    "youtube-transcript-api>=1.2.4",
     "yt-dlp>=2026.3.17",
 ]
 

@@ -10,8 +10,36 @@ import webvtt
 def fetch_transcript(video_id: str) -> Optional[str]:
     """
     Downloads and parses the transcript for a YouTube video.
-    Returns clean transcript text, or None if unavailable.
+    Attempts to fetch via youtube_transcript_api first (highly resistant to bot blocks).
+    Falls back to yt-dlp if unavailable.
     """
+    # Attempt 1: Try using the lightweight youtube_transcript_api first
+    try:
+        from youtube_transcript_api import YouTubeTranscriptApi
+        print(f"Attempting to fetch transcript for {video_id} using youtube_transcript_api...")
+        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
+        
+        seen: set[str] = set()
+        lines: list[str] = []
+        for entry in transcript_list:
+            start_sec = int(entry.get('start', 0))
+            text = entry.get('text', '').strip()
+            # Remove HTML tags if any
+            text = re.sub(r'<[^>]+>', '', text)
+            for line in text.splitlines():
+                line = line.strip()
+                if line and line not in seen:
+                    seen.add(line)
+                    lines.append(f"[t={start_sec}] {line}")
+        
+        if lines:
+            print(f"Successfully fetched transcript using youtube_transcript_api.")
+            return ' '.join(lines)
+    except Exception as e:
+        print(f"youtube-transcript-api failed for {video_id}: {e}")
+
+    # Attempt 2: Fall back to yt-dlp
+    print(f"Falling back to yt-dlp for {video_id}...")
     import sys
     from app.config import get_settings
     settings = get_settings()
