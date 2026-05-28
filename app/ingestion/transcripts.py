@@ -13,139 +13,189 @@ def fetch_transcript(video_id: str) -> Optional[str]:
     Attempts to fetch via youtube_transcript_api first (highly resistant to bot blocks).
     Falls back to yt-dlp if unavailable.
     """
-    # Attempt 1: Try using the lightweight youtube_transcript_api first
-    try:
-        from youtube_transcript_api import YouTubeTranscriptApi
-        print(f"Attempting to fetch transcript for {video_id} using youtube_transcript_api...")
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
-        
-        seen: set[str] = set()
-        lines: list[str] = []
-        for entry in transcript_list:
-            start_sec = int(entry.get('start', 0))
-            text = entry.get('text', '').strip()
-            # Remove HTML tags if any
-            text = re.sub(r'<[^>]+>', '', text)
-            for line in text.splitlines():
-                line = line.strip()
-                if line and line not in seen:
-                    seen.add(line)
-                    lines.append(f"[t={start_sec}] {line}")
-        
-        if lines:
-            print(f"Successfully fetched transcript using youtube_transcript_api.")
-            return ' '.join(lines)
-    except Exception as e:
-        print(f"youtube-transcript-api failed for {video_id}: {e}")
-
-    # Attempt 2: Fall back to yt-dlp
-    print(f"Falling back to yt-dlp for {video_id}...")
     import sys
+    import os
+    import requests
+    import http.cookiejar
     from app.config import get_settings
     settings = get_settings()
 
-    # Resolve yt-dlp executable path dynamically from the current virtual env
-    yt_dlp_path = "yt-dlp"
-    venv_bin = Path(sys.executable).parent
-    for candidate in ["yt-dlp.exe", "yt-dlp"]:
-        candidate_path = venv_bin / candidate
-        if candidate_path.exists():
-            yt_dlp_path = str(candidate_path)
-            break
+    # 1. Resolve and load cookies if configured or auto-detected
+    cookies_path = None
+    cookies_added = False
+    temp_cookies_file = None
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        output_template = str(Path(tmpdir) / "%(id)s.%(ext)s")
+    # Check if cookies content is passed as an environment secret (e.g. on Hugging Face)
+    cookies_content = os.environ.get("YOUTUBE_COOKIES_CONTENT", "")
+    if cookies_content.strip():
+        try:
+            # Create a temporary file to hold the cookies
+            import tempfile
+            fd, temp_path = tempfile.mkstemp(suffix=".txt", prefix="hf_cookies_")
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(cookies_content)
+            cookies_path = Path(temp_path)
+            temp_cookies_file = cookies_path
+            cookies_added = True
+            print("Loaded YouTube cookies dynamically from YOUTUBE_COOKIES_CONTENT environment secret.")
+        except Exception as e:
+            print(f"Failed to write YOUTUBE_COOKIES_CONTENT to temp file: {e}")
 
-        base_cmd = [
-            yt_dlp_path,
-            "--write-auto-sub",
-            "--write-sub",
-            "--sub-lang", "en",
-            "--sub-format", "vtt",
-            "--skip-download",
-            "--js-runtimes", "node",
-            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "--quiet",
-            "-o", output_template,
-        ]
-
-        # Add cookies if configured or auto-detected
-        cookies_added = False
-
-        # 1. Check settings
+    # Check settings next
+    if not cookies_added:
         cookies_path_str = getattr(settings, "youtube_cookies_path", "")
         if cookies_path_str:
-            cookies_path = Path(cookies_path_str)
-            if cookies_path.exists():
-                base_cmd.extend(["--cookies", str(cookies_path)])
+            p = Path(cookies_path_str)
+            if p.exists():
+                cookies_path = p
                 cookies_added = True
                 print(f"Using YouTube cookies from settings path: {cookies_path}")
 
-        # 2. Auto-detect cookies.txt or youtube_cookies.txt in root or data/
-        if not cookies_added:
-            for candidate in ["cookies.txt", "youtube_cookies.txt", "data/cookies.txt", "data/youtube_cookies.txt"]:
-                p = Path(candidate)
-                if p.exists():
-                    base_cmd.extend(["--cookies", str(p)])
-                    cookies_added = True
-                    print(f"Auto-detected and using YouTube cookies from: {p}")
-                    break
+    # Auto-detect local files
+    if not cookies_added:
+        for candidate in ["cookies.txt", "youtube_cookies.txt", "data/cookies.txt", "data/youtube_cookies.txt"]:
+            p = Path(candidate)
+            if p.exists():
+                cookies_path = p
+                cookies_added = True
+                print(f"Auto-detected and using YouTube cookies from: {p}")
+                break
 
-        # 3. Check browser cookies
-        cookies_browser = getattr(settings, "youtube_cookies_browser", "")
-        if not cookies_added and cookies_browser:
-            base_cmd.extend(["--cookies-from-browser", cookies_browser])
-            print(f"Using cookies from browser: {cookies_browser}")
+    # Build requests session with cookies loaded for youtube_transcript_api
+    session = None
+    if cookies_path:
+        try:
+            session = requests.Session()
+            cj = http.cookiejar.MozillaCookieJar()
+            cj.load(str(cookies_path), ignore_discard=True, ignore_expires=True)
+            session.cookies = cj
+            print(f"Successfully loaded browser cookies into youtube-transcript-api Session.")
+        except Exception as cookie_err:
+            print(f"Could not load cookies into youtube-transcript-api Session: {cookie_err}")
+            session = None
 
-        # Retry with different player clients.
-        # 'ios' is currently the most robust client for bypassing bot checks without cookies.
-        # 'android,web' is the original fallback.
-        client_configs = [
-            ["youtube:player-client=ios"],
-            ["youtube:player-client=android,web"]
-        ]
-
-        success = False
-        error_msgs = []
-
-        for config in client_configs:
-            cmd = base_cmd + [
-                "--extractor-args", config[0],
-                f"https://www.youtube.com/watch?v={video_id}"
-            ]
-            try:
-                # Run with 120s timeout
-                subprocess.run(cmd, check=True, capture_output=True, timeout=120)
-                vtt_files = list(Path(tmpdir).glob("*.vtt"))
-                if vtt_files:
-                    success = True
-                    break
-            except subprocess.CalledProcessError as e:
-                err = e.stderr.decode(errors="replace")
-                error_msgs.append(f"Config {config}: {err[:200]}")
-            except subprocess.TimeoutExpired:
-                error_msgs.append(f"Config {config}: Timed out")
-
-        if not success:
-            print(f"yt-dlp failed for {video_id}. Attempted configurations:")
-            for msg in error_msgs:
-                print(f"  - {msg}")
+    try:
+        # Attempt 1: Try using the lightweight youtube_transcript_api first
+        try:
+            from youtube_transcript_api import YouTubeTranscriptApi
+            print(f"Attempting to fetch transcript for {video_id} using youtube_transcript_api...")
+            api_instance = YouTubeTranscriptApi(http_client=session) if session else YouTubeTranscriptApi()
+            transcript_list = api_instance.fetch(video_id, languages=['en'])
             
-            # Print helpful instructions for user to resolve bot checks
-            if any("confirm you're not a bot" in m or "Sign in" in m for m in error_msgs):
-                print("\n[TIP] YouTube bot detection triggered! To resolve this, you can:")
-                print("1. Export cookies from your browser (e.g. using the 'Get cookies.txt' extension).")
-                print("2. Save the cookies as 'cookies.txt' in the project root directory.")
-                print("3. Or set YOUTUBE_COOKIES_PATH in your .env file to your cookies file path.")
-                print("4. Or set YOUTUBE_COOKIES_BROWSER=chrome (or firefox/edge/safari) in your .env to read cookies directly from your local browser.\n")
-            return None
+            seen: set[str] = set()
+            lines: list[str] = []
+            for entry in transcript_list:
+                start_sec = int(entry.start)
+                text = entry.text.strip()
+                # Remove HTML tags if any
+                text = re.sub(r'<[^>]+>', '', text)
+                for line in text.splitlines():
+                    line = line.strip()
+                    if line and line not in seen:
+                        seen.add(line)
+                        lines.append(f"[t={start_sec}] {line}")
+            
+            if lines:
+                print(f"Successfully fetched transcript using youtube_transcript_api.")
+                return ' '.join(lines)
+        except Exception as e:
+            print(f"youtube-transcript-api failed for {video_id}: {e}")
 
-        vtt_files = list(Path(tmpdir).glob("*.vtt"))
-        if not vtt_files:
-            print(f"No transcript found for {video_id}")
-            return None
+        # Attempt 2: Fall back to yt-dlp
+        print(f"Falling back to yt-dlp for {video_id}...")
 
-        return _parse_vtt(vtt_files[0])
+        # Resolve yt-dlp executable path dynamically from the current virtual env
+        yt_dlp_path = "yt-dlp"
+        venv_bin = Path(sys.executable).parent
+        for candidate in ["yt-dlp.exe", "yt-dlp"]:
+            candidate_path = venv_bin / candidate
+            if candidate_path.exists():
+                yt_dlp_path = str(candidate_path)
+                break
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_template = str(Path(tmpdir) / "%(id)s.%(ext)s")
+
+            base_cmd = [
+                yt_dlp_path,
+                "--write-auto-sub",
+                "--write-sub",
+                "--sub-lang", "en",
+                "--sub-format", "vtt",
+                "--skip-download",
+                "--js-runtimes", "node",
+                "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "--quiet",
+                "-o", output_template,
+            ]
+
+            # Apply cookies if we have them
+            if cookies_path:
+                base_cmd.extend(["--cookies", str(cookies_path)])
+            else:
+                # Check browser cookies fallback if no file
+                cookies_browser = getattr(settings, "youtube_cookies_browser", "")
+                if cookies_browser:
+                    base_cmd.extend(["--cookies-from-browser", cookies_browser])
+                    print(f"Using cookies from browser: {cookies_browser}")
+
+            # Retry with different player clients.
+            # 'ios' is currently the most robust client for bypassing bot checks without cookies.
+            # 'android,web' is the original fallback.
+            client_configs = [
+                ["youtube:player-client=ios"],
+                ["youtube:player-client=android,web"]
+            ]
+
+            success = False
+            error_msgs = []
+
+            for config in client_configs:
+                cmd = base_cmd + [
+                    "--extractor-args", config[0],
+                    f"https://www.youtube.com/watch?v={video_id}"
+                ]
+                try:
+                    # Run with 120s timeout
+                    subprocess.run(cmd, check=True, capture_output=True, timeout=120)
+                    vtt_files = list(Path(tmpdir).glob("*.vtt"))
+                    if vtt_files:
+                        success = True
+                        break
+                except subprocess.CalledProcessError as e:
+                    err = e.stderr.decode(errors="replace")
+                    error_msgs.append(f"Config {config}: {err[:200]}")
+                except subprocess.TimeoutExpired:
+                    error_msgs.append(f"Config {config}: Timed out")
+
+            if not success:
+                print(f"yt-dlp failed for {video_id}. Attempted configurations:")
+                for msg in error_msgs:
+                    print(f"  - {msg}")
+                
+                # Print helpful instructions for user to resolve bot checks
+                if any("confirm you're not a bot" in m or "Sign in" in m for m in error_msgs):
+                    print("\n[TIP] YouTube bot detection triggered! To resolve this, you can:")
+                    print("1. Export cookies from your browser (e.g. using the 'Get cookies.txt' extension).")
+                    print("2. Save the cookies as 'cookies.txt' in the project root directory.")
+                    print("3. Or set YOUTUBE_COOKIES_PATH in your .env file to your cookies file path.")
+                    print("4. Or set YOUTUBE_COOKIES_BROWSER=chrome (or firefox/edge/safari) in your .env to read cookies directly from your local browser.\n")
+                return None
+
+            vtt_files = list(Path(tmpdir).glob("*.vtt"))
+            if not vtt_files:
+                print(f"No transcript found for {video_id}")
+                return None
+
+            return _parse_vtt(vtt_files[0])
+    finally:
+        # Cleanup temporary cookies file if created
+        if temp_cookies_file and temp_cookies_file.exists():
+            try:
+                temp_cookies_file.unlink()
+                print("Cleaned up temporary YouTube cookies file.")
+            except Exception as cleanup_err:
+                print(f"Error cleaning up temporary cookies file: {cleanup_err}")
 
 
 def _parse_vtt(vtt_path: Path) -> Optional[str]:
