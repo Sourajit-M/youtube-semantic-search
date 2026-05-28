@@ -69,18 +69,23 @@ def fetch_transcript(video_id: str) -> Optional[str]:
                 print(f"Auto-detected and using YouTube cookies from: {p}")
                 break
 
-    # Build requests session with cookies loaded for youtube_transcript_api
-    session = None
+    # Build requests session (prefer curl-cffi to bypass TLS fingerprint blocks)
+    try:
+        from curl_cffi.requests import Session as CurlSession
+        session = CurlSession()
+        print("Using browser-grade curl-cffi Session to bypass TLS blocks.")
+    except ImportError:
+        session = requests.Session()
+        print("Using standard requests Session.")
+
     if cookies_path:
         try:
-            session = requests.Session()
             cj = http.cookiejar.MozillaCookieJar()
             cj.load(str(cookies_path), ignore_discard=True, ignore_expires=True)
             session.cookies = cj
-            print(f"Successfully loaded browser cookies into youtube-transcript-api Session.")
+            print(f"Successfully loaded browser cookies into Session.")
         except Exception as cookie_err:
-            print(f"Could not load cookies into youtube-transcript-api Session: {cookie_err}")
-            session = None
+            print(f"Could not load cookies into Session: {cookie_err}")
 
     try:
         # Attempt 1: Try using the lightweight youtube_transcript_api first
@@ -131,7 +136,7 @@ def fetch_transcript(video_id: str) -> Optional[str]:
                 "--sub-lang", "en",
                 "--sub-format", "vtt",
                 "--skip-download",
-                "--js-runtimes", "node",
+                "--impersonate", "chrome",
                 "--quiet",
                 "-o", output_template,
             ]
