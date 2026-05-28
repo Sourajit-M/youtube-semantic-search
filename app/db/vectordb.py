@@ -15,6 +15,7 @@ class ChunkResult:
   channel_name: str
   chunk_index: int
   distance: float
+  start_second: int = 0
 
   @property
   def similarity(self) -> float:
@@ -36,7 +37,7 @@ class VectorDB:
     )
 
   #write
-  def upsert_chunks(self, chunks: list[str], embeddings: list[list[float]], video_youtube_id: str,video_title: str, channel_name: str,) -> int:
+  def upsert_chunks(self, chunks: list[str], embeddings: list[list[float]], video_youtube_id: str, video_title: str, channel_name: str, start_seconds: Optional[list[int]] = None) -> int:
     """
     Store chunks for one video. Returns number of chunks stored.
 
@@ -57,6 +58,7 @@ class VectorDB:
         "video_title": video_title,
         "channel_name": channel_name,
         "chunk_index": i,
+        "start_second": start_seconds[i] if start_seconds else 0,
       }
       for i in range(len(chunks))
     ]
@@ -150,6 +152,7 @@ class VectorDB:
         channel_name=meta["channel_name"],
         chunk_index=meta["chunk_index"],
         distance=results["distances"][0][i],
+        start_second=meta.get("start_second", 0),
       ))
 
     return chunks

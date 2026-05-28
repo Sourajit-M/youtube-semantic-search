@@ -97,6 +97,22 @@ def create_tables() -> None:
   engine = get_engine()
   SQLModel.metadata.create_all(engine)
 
+  # Initialize the FTS5 virtual table
+  from sqlmodel import text
+  with Session(engine) as session:
+    session.exec(text(
+      "CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5("
+      "  chunk_id,"
+      "  text,"
+      "  video_youtube_id,"
+      "  video_title,"
+      "  channel_name,"
+      "  chunk_index UNINDEXED,"
+      "  start_second UNINDEXED"
+      ");"
+    ))
+    session.commit()
+
 
 def get_session():
   """
@@ -243,6 +259,11 @@ def delete_channel(session: Session, youtube_id: str) -> bool:
     select(Video).where(Video.channel_youtube_id == youtube_id)
   ).all()
 
+  # Collect video IDs for FTS5 cleanup
+  video_ids = [video.youtube_id for video in videos]
+  if video_ids:
+    delete_fts_chunks_for_videos(session, video_ids)
+
   for video in videos:
     jobs = session.exec(
       select(IngestionJob).where(IngestionJob.video_youtube_id == video.youtube_id)
@@ -254,3 +275,47 @@ def delete_channel(session: Session, youtube_id: str) -> bool:
   session.delete(channel)
   session.commit()
   return True
+
+
+def insert_fts_chunk(
+  session: Session,
+  chunk_id: str,
+  text_content: str,
+  video_youtube_id: str,
+  video_title: str,
+  channel_name: str,
+  chunk_index: int,
+  start_second: int,
+) -> None:
+  """Idempotently insert a chunk into the SQLite FTS5 index."""
+  from sqlmodel import text
+  # 1. Delete if already exists to keep it idempotent
+  session.exec(
+    text("DELETE FROM chunk_fts WHERE chunk_id = :cid").bindparams(cid=chunk_id)
+  )
+  # 2. Insert the new FTS entry
+  session.exec(
+    text(
+      "INSERT INTO chunk_fts (chunk_id, text, video_youtube_id, video_title, channel_name, chunk_index, start_second) "
+      "VALUES (:cid, :txt, :vid, :title, :channel, :idx, :start_sec)"
+    ).bindparams(
+      cid=chunk_id,
+      txt=text_content,
+      vid=video_youtube_id,
+      title=video_title,
+      channel=channel_name,
+      idx=chunk_index,
+      start_sec=start_second,
+    )
+  )
+  session.commit()
+
+
+def delete_fts_chunks_for_videos(session: Session, video_youtube_ids: list[str]) -> None:
+  """Remove all chunks for a list of video IDs from FTS5 index."""
+  from sqlmodel import text
+  for vid_id in video_youtube_ids:
+    session.exec(
+      text("DELETE FROM chunk_fts WHERE video_youtube_id = :vid").bindparams(vid=vid_id)
+    )
+  session.commit()

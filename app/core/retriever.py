@@ -15,16 +15,29 @@ from app.db.vectordb import ChunkResult, VectorDB
 
 class BM25Index:
   """
-  Wraps rank-bm25's BM25Okapi.
+  FTS5 full-text keyword search index backed by SQLite.
+  Completely replaces the binary rank-bm25 pickle index.
   """
 
   def __init__(self):
-    settings = get_settings()
-    self._index_path = settings.bm25_index_path
-    self._bm25: Optional[BM25Okapi] = None
-    self._chunk_ids: list[str] = []
-    self._chunk_texts: list[str] = []
-    self._metadatas: list[dict] = []
+    from sqlmodel import Session, text
+    from app.db.sqlite import get_engine
+    self._engine = get_engine()
+    
+    # Self-healing: create the FTS table if it doesn't exist yet to support isolated tests
+    with Session(self._engine) as session:
+      session.exec(text(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5("
+        "  chunk_id,"
+        "  text,"
+        "  video_youtube_id,"
+        "  video_title,"
+        "  channel_name,"
+        "  chunk_index UNINDEXED,"
+        "  start_second UNINDEXED"
+        ");"
+      ))
+      session.commit()
 
   def build(
     self,
@@ -32,48 +45,40 @@ class BM25Index:
     chunk_ids: list[str],
     metadatas: list[dict],
   ) -> None:
+    """
+    Build FTS index by inserting texts into SQLite FTS5 table.
+    Ensures unit tests and manual rebuilds work seamlessly.
+    """
+    from sqlmodel import Session, text
+    
+    with Session(self._engine) as session:
+      session.exec(text("DELETE FROM chunk_fts"))
+      session.commit()
+
     if not texts:
-      self._bm25 = None
-      self._chunk_ids = []
-      self._chunk_texts = []
-      self._metadatas = []
-      if Path(self._index_path).exists():
-        try:
-          Path(self._index_path).unlink()
-        except Exception as e:
-          print(f"Error removing stale BM25 pickle: {e}")
       return
 
-    self._chunk_ids = chunk_ids
-    self._chunk_texts = texts
-    self._metadatas = metadatas
-
-    tokenised = [text.lower().split() for text in texts]
-    self._bm25 = BM25Okapi(tokenised)
-    self._save()
+    with Session(self._engine) as session:
+      for text_content, cid, meta in zip(texts, chunk_ids, metadatas):
+        session.exec(
+          text(
+            "INSERT INTO chunk_fts (chunk_id, text, video_youtube_id, video_title, channel_name, chunk_index, start_second) "
+            "VALUES (:cid, :txt, :vid, :title, :channel, :idx, :start_sec)"
+          ).bindparams(
+            cid=cid,
+            txt=text_content,
+            vid=meta["video_youtube_id"],
+            title=meta["video_title"],
+            channel=meta["channel_name"],
+            idx=meta["chunk_index"],
+            start_sec=meta.get("start_second", 0),
+          )
+        )
+      session.commit()
 
   def load(self) -> bool:
-    if not Path(self._index_path).exists():
-      return False
-
-    with open(self._index_path, "rb") as f:
-      data = pickle.load(f)
-
-    self._bm25 = data["bm25"]
-    self._chunk_ids = data["chunk_ids"]
-    self._chunk_texts = data["chunk_texts"]
-    self._metadatas = data["metadatas"]
+    """Always ready since the SQLite FTS5 table is stored directly in metadata.db."""
     return True
-
-  def _save(self) -> None:
-    Path(self._index_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(self._index_path, "wb") as f:
-      pickle.dump({
-        "bm25": self._bm25,
-        "chunk_ids": self._chunk_ids,
-        "chunk_texts": self._chunk_texts,
-        "metadatas": self._metadatas,
-      }, f)
 
   def search(
     self,
@@ -81,39 +86,69 @@ class BM25Index:
     top_k: int,
     channel_name: Optional[str] = None,
   ) -> list[tuple[str, float, str, dict]]:
-    if self._bm25 is None:
+    """
+    FTS5 Full-Text search using SQLite's native bm25() ranking helper function.
+    
+    SQLite's bm25() function returns a float score where a lower score
+    (more negative) indicates a better match. We sort by score ASC.
+    """
+    if not query.strip():
       return []
 
-    tokenised_query = query.lower().split()
-    scores = self._bm25.get_scores(tokenised_query)
+    from sqlmodel import Session, text
+    import re
 
-    scored = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)
+    # Extract alphanumeric words and join with OR to mimic standard BM25 multi-keyword matching
+    words = re.findall(r'\w+', query)
+    if not words:
+      return []
+    cleaned_query = " OR ".join(words)
 
-    results = []
-    for idx, score in scored:
-      if score == 0:
-        break
+    sql = (
+      "SELECT chunk_id, text, video_youtube_id, video_title, channel_name, chunk_index, start_second, "
+      "bm25(chunk_fts) as score "
+      "FROM chunk_fts "
+      "WHERE chunk_fts MATCH :query"
+    )
+    if channel_name:
+      sql += " AND channel_name = :channel"
+    sql += " ORDER BY score ASC LIMIT :limit"
 
-      meta = self._metadatas[idx]
+    with Session(self._engine) as session:
+      params = {"query": cleaned_query, "limit": top_k}
+      if channel_name:
+        params["channel"] = channel_name
+      
+      try:
+        rs = session.exec(text(sql).bindparams(**params)).all()
+      except Exception as e:
+        print(f"FTS5 Query warning: {e}")
+        return []
 
-      if channel_name and meta.get("channel_name") != channel_name:
-        continue
+      results = []
+      for r in rs:
+        raw_score = r[7]
+        # Invert the negative FTS score to return a positive metric (lower score is better, so higher -score is better)
+        pos_score = -raw_score if raw_score else 0.0
 
-      results.append((
-        self._chunk_ids[idx],
-        score,
-        self._chunk_texts[idx],
-        meta,
-      ))
-
-      if len(results) >= top_k:
-        break
-
-    return results
+        results.append((
+          r[0],
+          pos_score,
+          r[1],
+          {
+            "video_youtube_id": r[2],
+            "video_title": r[3],
+            "channel_name": r[4],
+            "chunk_index": r[5],
+            "start_second": int(r[6]) if r[6] is not None else 0,
+          }
+        ))
+      
+      return results
 
   @property
   def is_ready(self) -> bool:
-    return self._bm25 is not None
+    return True
 
 
 # ── RRF Fusion ────────────────────────────────────────────────────────────────
@@ -148,6 +183,7 @@ def reciprocal_rank_fusion(
           "video_title": result.video_title,
           "channel_name": result.channel_name,
           "chunk_index": result.chunk_index,
+          "start_second": result.start_second,
         },
       }
 
@@ -162,6 +198,7 @@ def reciprocal_rank_fusion(
       "video_title": chunk_data[chunk_id]["metadata"]["video_title"],
       "channel_name": chunk_data[chunk_id]["metadata"]["channel_name"],
       "chunk_index": chunk_data[chunk_id]["metadata"]["chunk_index"],
+      "start_second": chunk_data[chunk_id]["metadata"].get("start_second", 0),
     }
     for chunk_id, score in ranked
     if chunk_id in chunk_data

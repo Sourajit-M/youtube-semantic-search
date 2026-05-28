@@ -72,12 +72,26 @@ def _parse_vtt(vtt_path: Path) -> Optional[str]:
         clean_path.write_text(raw, encoding="utf-8")
 
         for caption in webvtt.read(str(clean_path), encoding="utf-8"):
+            # Parse start time cue MM:SS.fff or HH:MM:SS.fff to integer seconds
+            start_sec = 0
+            try:
+                parts = caption.start.split(':')
+                if len(parts) == 3:
+                    h, m, s = parts
+                    start_sec = int(h) * 3600 + int(m) * 60 + int(float(s))
+                elif len(parts) == 2:
+                    m, s = parts
+                    start_sec = int(m) * 60 + int(float(s))
+            except Exception:
+                pass
+
             for line in caption.text.strip().splitlines():
                 line = line.strip()
                 line = re.sub(r'<[^>]+>', '', line)
                 if line and line not in seen:
                     seen.add(line)
-                    lines.append(line)
+                    # Embed time marker in the text
+                    lines.append(f"[t={start_sec}] {line}")
 
         return ' '.join(lines) if lines else None
 

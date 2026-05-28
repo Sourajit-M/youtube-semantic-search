@@ -241,11 +241,24 @@ class IngestionPipeline:
           f"Transcript too short ({len(transcript.split())} words)"
         )
 
-      chunks = self._chunker.chunk_texts(transcript)
-      if not chunks:
+      import re
+      raw_chunks = self._chunker.chunk_texts(transcript)
+      if not raw_chunks:
         raise ValueError("Chunking produced no chunks")
 
-      embeddings = self._embedder.embed(chunks)
+      # Extract starting timestamps and clean the chunk text
+      start_seconds = []
+      clean_chunks = []
+      for chunk_text in raw_chunks:
+        match = re.search(r'\[t=(\d+)\]', chunk_text)
+        start_sec = int(match.group(1)) if match else 0
+        start_seconds.append(start_sec)
+        
+        # Clean all [t=seconds] markers from text so embeddings/search are pure
+        clean_txt = re.sub(r'\[t=\d+\]', '', chunk_text).strip()
+        clean_chunks.append(clean_txt)
+
+      embeddings = self._embedder.embed(clean_chunks)
 
       with Session(self._engine) as session:
         from app.db.sqlite import select, Video
@@ -262,19 +275,34 @@ class IngestionPipeline:
             channel_name = channel.name
 
       self._vectordb.upsert_chunks(
-        chunks=chunks,
+        chunks=clean_chunks,
         embeddings=embeddings,
         video_youtube_id=video_id,
         video_title=title,
         channel_name=channel_name,
+        start_seconds=start_seconds,
       )
 
       with Session(self._engine) as session:
-        mark_video_ingested(session, video_id, len(chunks))
-        update_job(session, job_id, JobStatus.DONE,
-                  chunks_created=len(chunks))
+        from app.db.sqlite import insert_fts_chunk
+        # Index each chunk incrementally into SQLite FTS5 virtual table
+        for i, (txt, start_sec) in enumerate(zip(clean_chunks, start_seconds)):
+          insert_fts_chunk(
+            session=session,
+            chunk_id=f"{video_id}_chunk_{i}",
+            text_content=txt,
+            video_youtube_id=video_id,
+            video_title=title,
+            channel_name=channel_name,
+            chunk_index=i,
+            start_second=start_sec,
+          )
 
-      print(f"[OK] {len(chunks)} chunks stored")
+        mark_video_ingested(session, video_id, len(clean_chunks))
+        update_job(session, job_id, JobStatus.DONE,
+                  chunks_created=len(clean_chunks))
+
+      print(f"[OK] {len(clean_chunks)} chunks stored")
       return True
 
     except Exception as e:

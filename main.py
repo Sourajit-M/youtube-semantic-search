@@ -286,13 +286,18 @@ def ask_page():
           if result["sources"]:
               st.markdown("#### Sources")
               for source in result["sources"]:
-                  yt_url = f"https://youtube.com/watch?v={source['video_youtube_id']}"
+                  start_sec = source.get("start_second", 0)
+                  mins = start_sec // 60
+                  secs = start_sec % 60
+                  time_str = f"{mins}:{secs:02d}"
+                  
+                  yt_url = f"https://youtube.com/watch?v={source['video_youtube_id']}&t={start_sec}s"
                   st.markdown(
                       f'<div class="rag-card">'
                       f'<a href="{yt_url}" target="_blank" style="color:#fafafa;text-decoration:none;font-weight:500;">'
                       f'▶ {source["video_title"]}</a>'
                       f'<br><span style="color:#a1a1aa;font-size:12px">'
-                      f'{source["channel_name"]}</span>'
+                      f'{source["channel_name"]} at {time_str}</span>'
                       f'&nbsp;&nbsp;<span class="score-badge">RRF {source["rrf_score"]:.4f}</span>'
                       f'</div>',
                       unsafe_allow_html=True,

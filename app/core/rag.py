@@ -49,7 +49,11 @@ def _build_prompt(query: str, chunks: list[dict]) -> str:
 
   context_blocks = []
   for chunk in chunks:
-    block = f"[Source: {chunk['video_title']}]\n{chunk['text']}"
+    start_sec = chunk.get("start_second", 0)
+    mins = start_sec // 60
+    secs = start_sec % 60
+    time_str = f"{mins}:{secs:02d}"
+    block = f"[Source: {chunk['video_title']} at {time_str}]\n{chunk['text']}"
     context_blocks.append(block)
 
   context = "\n\n".join(context_blocks)
@@ -129,6 +133,7 @@ class RAGPipeline:
           "video_title": chunk["video_title"],
           "channel_name": chunk["channel_name"],
           "rrf_score": chunk["rrf_score"],
+          "start_second": chunk.get("start_second", 0),
         })
 
     return RAGResponse(

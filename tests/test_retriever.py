@@ -139,31 +139,40 @@ def test_rrf_top_k_respected():
   assert len(fused) <= 3
 
 
-def test_bm25_index_clear_on_empty(tmp_path):
-  """Verify that BM25Index clears state and unlinks the file on empty input."""
-  import tempfile
-  from pathlib import Path
-  
+def test_bm25_index_clear_on_empty():
+  """Verify that BM25Index clears the database virtual table on empty input."""
   index = BM25Index()
-  # Use a temporary file for index path to avoid polluting actual data
-  temp_file = Path(tempfile.mktemp(suffix=".pkl"))
-  index._index_path = temp_file
   
   # Build with actual text
   index.build(
-    texts=["some chunk text"],
-    chunk_ids=["chunk_1"],
+    texts=["photosynthesis converts sunlight"],
+    chunk_ids=["chunk_clear_1"],
     metadatas=[{"video_youtube_id": "v1", "video_title": "V1", "channel_name": "C", "chunk_index": 0}]
   )
   
   assert index.is_ready
-  assert temp_file.exists()
+  res = index.search("photosynthesis", 5)
+  assert len(res) == 1
   
   # Clear it by building with empty lists
   index.build([], [], [])
   
-  assert not index.is_ready
-  assert not temp_file.exists()
+  res = index.search("photosynthesis", 5)
+  assert len(res) == 0
+
+
+def test_timestamp_parsing_in_fts():
+  """Verify that FTS search preserves and extracts start_second correctly."""
+  index = BM25Index()
+  index.build(
+    texts=["this chunk starts later"],
+    chunk_ids=["chunk_time_1"],
+    metadatas=[{"video_youtube_id": "v_time", "video_title": "Time Video", "channel_name": "C", "chunk_index": 0, "start_second": 125}]
+  )
+  
+  res = index.search("starts", 5)
+  assert len(res) == 1
+  assert res[0][3]["start_second"] == 125
 
 
 def test_resolve_channel_id_robustness():

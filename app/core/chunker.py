@@ -19,7 +19,8 @@ class TranscriptChunker:
 
   def clean(self, text: str) -> str:
     text = re.sub(r'\s+', ' ', text)
-    text = re.sub(r'\[.*?\]', '', text)
+    # Strip generic bracket annotations (like [Music]) but preserve our custom time markers ([t=XX])
+    text = re.sub(r'\[(?!t=\d+\])[^\]]*\]', '', text)
 
     return text.strip()
 

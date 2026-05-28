@@ -32,6 +32,10 @@ class Settings(BaseSettings):
   
   ingest_interval_minutes: int = 60
 
+  jwt_secret_key: str = "supersecret_default_key_change_me_in_production"
+  jwt_algorithm: str = "HS256"
+  access_token_expire_minutes: int = 60
+
   @property
   def active_llm_model(self) -> str:
     models = {

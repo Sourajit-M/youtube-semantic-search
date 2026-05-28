@@ -38,6 +38,7 @@ class SourceVideo(BaseModel):
   video_title: str
   channel_name: str
   rrf_score: float
+  start_second: int = 0
 
 
 class AskResponse(BaseModel):
@@ -54,6 +55,7 @@ class SearchResult(BaseModel):
   text: str
   rrf_score: float
   chunk_index: int
+  start_second: int = 0
 
 
 class SearchResponse(BaseModel):
