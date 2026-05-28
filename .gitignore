@@ -5,6 +5,8 @@
 # Data — never commit your vector DB or transcripts
 data/
 *.pkl
+cookies.txt
+*cookies.txt
 
 # Python
 __pycache__/
