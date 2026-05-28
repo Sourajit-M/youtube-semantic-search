@@ -29,11 +29,19 @@ def fetch_transcript(video_id: str) -> Optional[str]:
     cookies_content = os.environ.get("YOUTUBE_COOKIES_CONTENT", "")
     if cookies_content.strip():
         try:
+            # Ensure the Netscape header is present at the start of the file
+            header = "# Netscape HTTP Cookie File\n"
+            content_to_write = cookies_content.strip()
+            if not content_to_write.startswith("# Netscape"):
+                content_to_write = header + content_to_write
+            # Add a trailing newline to avoid EOF errors
+            content_to_write += "\n"
+
             # Create a temporary file to hold the cookies
             import tempfile
             fd, temp_path = tempfile.mkstemp(suffix=".txt", prefix="hf_cookies_")
             with os.fdopen(fd, 'w', encoding='utf-8') as f:
-                f.write(cookies_content)
+                f.write(content_to_write)
             cookies_path = Path(temp_path)
             temp_cookies_file = cookies_path
             cookies_added = True
