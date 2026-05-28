@@ -21,6 +21,9 @@ class Settings(BaseSettings):
 
   youtube_api_key: str = ""
 
+  youtube_cookies_path: str = ""
+  youtube_cookies_browser: str = ""
+
   chunk_size: int = 300
   chunk_overlap: int = 50
   
