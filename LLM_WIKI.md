@@ -13,11 +13,12 @@
 5. [Core Modules Reference](#5-core-modules-reference)
    - [Chunker](#51-chunker)
    - [Embedder](#52-embedder)
-   - [BM25 Index](#53-bm25-index)
+   - [BM25 Index (SQLite FTS5)](#53-bm25-index-sqlite-fts5)
    - [Vector Database (ChromaDB)](#54-vector-database-chromadb)
    - [Hybrid Retriever & RRF Fusion](#55-hybrid-retriever--rrf-fusion)
    - [RAG Pipeline](#56-rag-pipeline)
    - [LLM Gateway](#57-llm-gateway)
+   - [Video Timestamp Citations](#58-video-timestamp-citations)
 6. [Ingestion System](#6-ingestion-system)
    - [YouTube API Layer](#61-youtube-api-layer)
    - [Transcript Extraction](#62-transcript-extraction)
@@ -26,7 +27,7 @@
 7. [Database Layer](#7-database-layer)
    - [SQLite (Metadata)](#71-sqlite-metadata)
    - [ChromaDB (Vectors)](#72-chromadb-vectors)
-   - [BM25 Index (Keyword)](#73-bm25-index-keyword)
+   - [BM25 Index (SQLite FTS5 Virtual Table)](#73-bm25-index-sqlite-fts5-virtual-table)
 8. [API Reference](#8-api-reference)
 9. [Configuration & Environment](#9-configuration--environment)
 10. [Evaluation Harness](#10-evaluation-harness)
@@ -69,7 +70,7 @@ The key guarantee: **answers are grounded in real transcript content**, not hall
        │                  │          │
   ┌────▼──────┐   ┌───────▼──┐ ┌────▼──────────────┐
   │ YouTube   │   │ ChromaDB │ │  BM25 Index        │
-  │ API+yt-dlp│   │(vectors) │ │ (keyword/pickle)   │
+  │ API+yt-dlp│   │(vectors) │ │ (SQLite FTS5)      │
   └────┬──────┘   └──────────┘ └────────────────────┘
        │
   ┌────▼──────────────┐   ┌──────────────────────────┐
@@ -120,7 +121,7 @@ For each uningested video:
   SQLite: mark_video_ingested()
         │
         ▼
-  HybridRetriever.rebuild_bm25()  → BM25 index refreshed on disk
+  HybridRetriever.rebuild_bm25()  → SQLite FTS5 index refreshed
 ```
 
 ---
@@ -194,8 +195,6 @@ Splits a raw transcript string into overlapping token windows.
 
 **Why 300/50?** A 300-word window covers ~2–3 minutes of speech — enough context for a coherent idea. 50-word overlap prevents answers from being split across chunk boundaries.
 
----
-
 ### 5.2 Embedder
 
 **File:** `app/core/embedder.py`
@@ -219,23 +218,23 @@ Wraps FastEmbed's ONNX runtime embedding model.
 
 ---
 
-### 5.3 BM25 Index
+### 5.3 BM25 Index (SQLite FTS5)
 
 **File:** `app/core/retriever.py` → `class BM25Index`
 
-An in-memory keyword search index using `rank-bm25`'s `BM25Okapi` variant.
+A database-level keyword search index using SQLite's native FTS5 (Full-Text Search) module. It completely replaces the insecure, thread-unsafe binary `pickle` implementation.
 
-**Lifecycle:**
-1. **Startup:** `load()` from `data/bm25_index.pkl` if it exists.
-2. **First run / after ingestion:** `build()` from all chunks in ChromaDB.
-3. **After each ingestion:** `rebuild_bm25()` called automatically.
-4. **Persistence:** Serialized to disk via `pickle`.
+**Lifecycle & Syncing:**
+1. **Startup:** Zero-latency startup. FTS5 tables (`chunk_fts`) are persisted directly inside the SQLite database (`metadata.db`).
+2. **Incremental Indexing:** Chunks are written directly to FTS5 at ingestion time via `insert_fts_chunk(...)`.
+3. **Incremental Deletion:** Chunks are deleted instantly when channels/videos are removed via `delete_fts_chunks_for_videos(...)`.
+4. **Self-Healing:** If the FTS5 table is missing (e.g. during isolated unit tests), the `BM25Index` constructor automatically recreates it.
 
-**Scoring:** BM25Okapi scores each chunk for term frequency saturation and document length normalization. Returns `(chunk_id, score, text, metadata)` tuples sorted by score descending.
+**Scoring:**
+FTS5 uses SQLite's highly optimized, native C-level `bm25(chunk_fts)` auxiliary function. It scores term frequency saturation and document length normalization natively in SQL, ordering matches by `score ASC` (since FTS5 BM25 returns negative relevance values).
 
-**Channel filter:** Applied at search time — skips chunks not matching the requested channel.
-
-**Limitation:** The BM25 index is global — it cannot be partially updated. Adding new videos requires a full rebuild from ChromaDB (typically fast, done in-process).
+**Query Expansion:**
+Incoming search queries are regex-parsed into clean alphanumeric word lists joined with `OR` (e.g., `'plate OR tectonics'`). This mimics standard BM25 behavior, matching chunks containing *any* of the keywords and ranking multi-word matches at the top.
 
 ---
 
@@ -360,6 +359,21 @@ Thin wrapper over LiteLLM with primary + fallback provider logic.
 **Fallback logic:** If the primary `completion()` call raises any exception, the fallback model is tried. If both fail, a `RuntimeError` is raised with both error messages.
 
 **Provider switching:** Change `LLM_PROVIDER` in `.env` to swap between `groq` and `gemini` without any code changes.
+
+---
+
+### 5.8 Video Timestamp Citations
+
+**Files:** `app/ingestion/transcripts.py`, `app/core/chunker.py`, `app/ingestion/pipeline.py`, `app/core/rag.py`, `main.py`
+
+Preserves subtitle timestamps from raw YouTube WebVTT files throughout the ingestion and query pipelines, creating clickable YouTube citations.
+
+**The Pipeline Flow:**
+1. **Timing Capture (`transcripts.py`):** `_parse_vtt` parses cue intervals (e.g. `00:01:23.450` $\rightarrow$ `83` seconds) and prefixes transcript lines with temporal tags: `[t=83] hello world`.
+2. **Negative Lookahead Preservation (`chunker.py`):** The cleaning regex is updated with a negative lookahead to strip generic annotations (like `[Music]`) but preserve timing tags: `re.sub(r'\[(?!t=\d+\])[^\]]*\]', '', text)`.
+3. **Extraction & Vector Cleaning (`pipeline.py`):** The pipeline scans for the first `[t=seconds]` tag to set `start_second` in metadata. It then strips all timing tags (`re.sub(r'\[t=\d+\]', '', text)`) so the embedder and database receive clean, natural text for vector search.
+4. **Retrieval & RRF Fusion (`retriever.py`):** Chunks returned by ChromaDB or FTS5 carry `start_second` in their metadata.
+5. **LLM Citation & UI Linkage (`rag.py` & `main.py`):** We format start seconds as `MM:SS` (e.g., `at 1:24`) and inject them into RAG context blocks. In the Streamlit UI, YouTube links are appended with exact query strings: `&t={start_second}s`.
 
 ---
 
@@ -510,21 +524,25 @@ Single collection `video_chunks`. Each document is a chunk string with its 384-d
 
 ---
 
-### 7.3 BM25 Index (Keyword)
+### 7.3 BM25 Index (SQLite FTS5 Virtual Table)
 
-**Path:** `./data/bm25_index.pkl`  
+**Table Name:** `chunk_fts`  
+**Storage:** Contained natively inside `./data/metadata.db`
 
-Pickle file containing:
-```python
-{
-  "bm25": BM25Okapi,       # fitted model
-  "chunk_ids": list[str],  # parallel arrays
-  "chunk_texts": list[str],
-  "metadatas": list[dict],
-}
+**Schema:**
+```sql
+CREATE VIRTUAL TABLE chunk_fts USING fts5(
+    chunk_id,               -- The text index key
+    text,                   -- The transcript content (INDEXED)
+    video_youtube_id,       -- Video mapping (INDEXED)
+    video_title,            -- Video mapping (INDEXED)
+    channel_name,           -- Channel mapping (INDEXED)
+    chunk_index UNINDEXED,  -- Stored but skipped by search index tree
+    start_second UNINDEXED  -- Stored but skipped by search index tree
+);
 ```
 
-Rebuilt from ChromaDB on first startup (if missing) and after every ingestion batch.
+Keyword indexing is transaction-safe, thread-safe, supports concurrent writes, and updates incrementally!
 
 ---
 
@@ -640,7 +658,6 @@ All settings in `.env`. Loaded via `pydantic-settings` (type-safe, validated).
 | `TOP_K_RESULTS` | `5` | Default chunks retrieved per query |
 | `CHROMA_DB_PATH` | `./data/vectordb` | ChromaDB persistence path |
 | `SQLITE_DB_PATH` | `./data/metadata.db` | SQLite path |
-| `BM25_INDEX_PATH` | `./data/bm25_index.pkl` | BM25 pickle path |
 | `INGEST_INTERVAL_MINUTES` | `60` | Scheduler polling interval |
 
 **Settings singleton:** `get_settings()` is `@lru_cache` — loaded once per process.
