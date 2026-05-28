@@ -125,11 +125,16 @@ class VectorDB:
     The retriever fuses both result lists — this method only does
     the vector half.
     """
+    total_elements = self.count()
+    if total_elements == 0:
+      return []
+
+    query_k = min(top_k, total_elements)
     where = {"channel_name": channel_name} if channel_name else None
 
     results = self._collection.query(
       query_embeddings=[query_embedding],
-      n_results=top_k,
+      n_results=query_k,
       where=where,
       include=["documents", "metadatas", "distances"],
     )

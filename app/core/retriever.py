@@ -33,6 +33,15 @@ class BM25Index:
     metadatas: list[dict],
   ) -> None:
     if not texts:
+      self._bm25 = None
+      self._chunk_ids = []
+      self._chunk_texts = []
+      self._metadatas = []
+      if Path(self._index_path).exists():
+        try:
+          Path(self._index_path).unlink()
+        except Exception as e:
+          print(f"Error removing stale BM25 pickle: {e}")
       return
 
     self._chunk_ids = chunk_ids
@@ -182,12 +191,12 @@ class HybridRetriever:
       channel_name=channel_name
     )
 
-    if not texts:
-      print("No chunks in ChromaDB yet — BM25 index empty")
-      return
-
     self._bm25.build(texts=texts, chunk_ids=ids, metadatas=metadatas)
-    print(f"BM25 index built: {len(texts)} chunks indexed")
+
+    if not texts:
+      print("No chunks in ChromaDB yet — BM25 index cleared")
+    else:
+      print(f"BM25 index built: {len(texts)} chunks indexed")
 
   def search(
     self,

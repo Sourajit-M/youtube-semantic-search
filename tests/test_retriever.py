@@ -137,3 +137,89 @@ def test_rrf_top_k_respected():
   )
 
   assert len(fused) <= 3
+
+
+def test_bm25_index_clear_on_empty(tmp_path):
+  """Verify that BM25Index clears state and unlinks the file on empty input."""
+  import tempfile
+  from pathlib import Path
+  
+  index = BM25Index()
+  # Use a temporary file for index path to avoid polluting actual data
+  temp_file = Path(tempfile.mktemp(suffix=".pkl"))
+  index._index_path = temp_file
+  
+  # Build with actual text
+  index.build(
+    texts=["some chunk text"],
+    chunk_ids=["chunk_1"],
+    metadatas=[{"video_youtube_id": "v1", "video_title": "V1", "channel_name": "C", "chunk_index": 0}]
+  )
+  
+  assert index.is_ready
+  assert temp_file.exists()
+  
+  # Clear it by building with empty lists
+  index.build([], [], [])
+  
+  assert not index.is_ready
+  assert not temp_file.exists()
+
+
+def test_resolve_channel_id_robustness():
+  """Test that resolve_channel_id handles various URL forms robustly (mocked)."""
+  from unittest.mock import MagicMock, patch
+  from app.ingestion.youtube_api import resolve_channel_id
+  
+  mock_youtube = MagicMock()
+  mock_youtube.channels().list().execute.return_value = {
+    "items": [{
+      "id": "UC1234567890123456789012",
+      "snippet": {"title": "Test Channel"}
+    }]
+  }
+  
+  with patch("app.ingestion.youtube_api.get_youtube_client", return_value=mock_youtube):
+    # Test UC... direct ID
+    cid, ctitle = resolve_channel_id("UC1234567890123456789012")
+    assert cid == "UC1234567890123456789012"
+    
+    # Test channel/UC... path
+    cid, ctitle = resolve_channel_id("https://youtube.com/channel/UC1234567890123456789012")
+    assert cid == "UC1234567890123456789012"
+    
+    # Test channel/UC... path with videos suffix and trailing slash
+    cid, ctitle = resolve_channel_id("https://www.youtube.com/channel/UC1234567890123456789012/videos/")
+    assert cid == "UC1234567890123456789012"
+
+
+def test_vectordb_search_clipping():
+  """Verify that VectorDB.search clips top_k to total chunks count to prevent ValueError."""
+  from unittest.mock import MagicMock, patch
+  from app.db.vectordb import VectorDB
+  
+  mock_collection = MagicMock()
+  mock_collection.count.return_value = 2
+  mock_collection.query.return_value = {
+    "ids": [["chunk_1", "chunk_2"]],
+    "documents": [["text 1", "text 2"]],
+    "metadatas": [[
+      {"video_youtube_id": "v1", "video_title": "V1", "channel_name": "C", "chunk_index": 0},
+      {"video_youtube_id": "v1", "video_title": "V1", "channel_name": "C", "chunk_index": 1}
+    ]],
+    "distances": [[0.1, 0.2]]
+  }
+  
+  mock_client = MagicMock()
+  mock_client.get_or_create_collection.return_value = mock_collection
+  
+  with patch("chromadb.PersistentClient", return_value=mock_client):
+    vdb = VectorDB()
+    # Query with top_k = 10, but count is only 2
+    results = vdb.search(query_embedding=[0.1]*384, top_k=10)
+    
+    # Check that n_results passed to query was clipped to 2
+    mock_collection.query.assert_called_once()
+    kwargs = mock_collection.query.call_args[1]
+    assert kwargs["n_results"] == 2
+    assert len(results) == 2

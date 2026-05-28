@@ -465,34 +465,26 @@ def channels_page():
                           else ""
                       )
 
-                      st.markdown(
-                          f'<div style="display:flex;align-items:center;'
-                          f'gap:10px;padding:7px 2px;border-bottom:1px solid '
-                          f'#18181b">'
-                          f'<span style="color:{color};font-size:12px;'
-                          f'min-width:14px">{icon}</span>'
-                          f'<a href="{yt_url}" target="_blank" '
-                          f'style="color:#e4e4e7;text-decoration:none;'
-                          f'font-size:13px;flex:1;'
-                          f'overflow:hidden;white-space:nowrap;'
-                          f'text-overflow:ellipsis">{v["title"]}</a>'
-                          f'<span style="color:#52525b;font-size:11px;'
-                          f'white-space:nowrap">{dur}</span>'
-                          f'<span style="color:#52525b;font-size:11px;'
-                          f'white-space:nowrap">{views}</span>',
-                          unsafe_allow_html=True,
-                      )
-                      if not v["ingested"]:
-                          if st.button("Index ↗", key=f"ingest_{v['youtube_id']}", 
-                                       help="Index this video now"):
-                              with st.spinner(f"Indexing {v['title']}..."):
-                                  if ingest_single_video(v["youtube_id"]):
-                                      st.success(f"Indexed {v['title']}")
-                                      get_health.clear()
-                                      st.rerun()
-                                  else:
-                                      st.error("Indexing failed")
-                      st.markdown('</div>', unsafe_allow_html=True)
+                      col_icon, col_title, col_dur, col_views, col_btn = st.columns([0.5, 8, 1, 1, 2.5])
+                      with col_icon:
+                          st.markdown(f'<span style="color:{color};font-size:14px">{icon}</span>', unsafe_allow_html=True)
+                      with col_title:
+                          st.markdown(f'<a href="{yt_url}" target="_blank" style="color:#e4e4e7;text-decoration:none;font-size:13px;display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{v["title"]}</a>', unsafe_allow_html=True)
+                      with col_dur:
+                          st.markdown(f'<span style="color:#52525b;font-size:12px;white-space:nowrap">{dur}</span>', unsafe_allow_html=True)
+                      with col_views:
+                          st.markdown(f'<span style="color:#52525b;font-size:12px;white-space:nowrap">{views}</span>', unsafe_allow_html=True)
+                      with col_btn:
+                          if not v["ingested"]:
+                              if st.button("Index ↗", key=f"ingest_{v['youtube_id']}", 
+                                           help="Index this video now"):
+                                  with st.spinner(f"Indexing {v['title']}..."):
+                                      if ingest_single_video(v["youtube_id"]):
+                                          st.success(f"Indexed {v['title']}")
+                                          get_health.clear()
+                                          st.rerun()
+                                      else:
+                                          st.error("Indexing failed")
 
 
 # ── Navigation Setup ──────────────────────────────────────────────────────────

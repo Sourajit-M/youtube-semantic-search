@@ -12,11 +12,22 @@ def fetch_transcript(video_id: str) -> Optional[str]:
     Downloads and parses the transcript for a YouTube video.
     Returns clean transcript text, or None if unavailable.
     """
+    import sys
+
+    # Resolve yt-dlp executable path dynamically from the current virtual env
+    yt_dlp_path = "yt-dlp"
+    venv_bin = Path(sys.executable).parent
+    for candidate in ["yt-dlp.exe", "yt-dlp"]:
+        candidate_path = venv_bin / candidate
+        if candidate_path.exists():
+            yt_dlp_path = str(candidate_path)
+            break
+
     with tempfile.TemporaryDirectory() as tmpdir:
         output_template = str(Path(tmpdir) / "%(id)s.%(ext)s")
 
         cmd = [
-            "yt-dlp",
+            yt_dlp_path,
             "--write-auto-sub",
             "--write-sub",
             "--sub-lang", "en",

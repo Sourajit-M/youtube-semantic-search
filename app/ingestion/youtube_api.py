@@ -79,6 +79,26 @@ def resolve_channel_id(channel_input: str) -> tuple[str, str]:
   ]:
     channel_input = channel_input.removeprefix(prefix)
 
+  for prefix in [
+    "channel/",
+    "c/",
+    "user/",
+  ]:
+    channel_input = channel_input.removeprefix(prefix)
+
+  # Strip trailing slash and common tab suffixes
+  channel_input = channel_input.rstrip('/')
+  for suffix in [
+    "/videos",
+    "/featured",
+    "/playlists",
+    "/shorts",
+    "/streams",
+    "/community",
+  ]:
+    channel_input = channel_input.removesuffix(suffix)
+  channel_input = channel_input.rstrip('/')
+
   if re.match(r'^UC[\w-]{22}$', channel_input):
     response = youtube.channels().list(
       part="snippet", id=channel_input

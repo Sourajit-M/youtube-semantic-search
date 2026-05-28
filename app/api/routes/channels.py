@@ -102,6 +102,14 @@ def remove_channel(
   if not found:
     raise HTTPException(status_code=404, detail="Channel not found")
 
+  # Rebuild BM25 index to keep keyword search in sync
+  try:
+    from app.core.retriever import HybridRetriever
+    retriever = HybridRetriever()
+    retriever.rebuild_bm25()
+  except Exception as e:
+    print(f"BM25 index rebuild warning for {youtube_id}: {e}")
+
 
 @router.post("/videos/{youtube_id}/ingest")
 def ingest_video(youtube_id: str):
