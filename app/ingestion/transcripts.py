@@ -72,7 +72,7 @@ def fetch_transcript(video_id: str) -> Optional[str]:
     # Build requests session (prefer curl-cffi to bypass TLS fingerprint blocks)
     try:
         from curl_cffi.requests import Session as CurlSession
-        session = CurlSession()
+        session = CurlSession(impersonate="chrome")
         print("Using browser-grade curl-cffi Session to bypass TLS blocks.")
     except ImportError:
         session = requests.Session()
@@ -136,7 +136,6 @@ def fetch_transcript(video_id: str) -> Optional[str]:
                 "--sub-lang", "en",
                 "--sub-format", "vtt",
                 "--skip-download",
-                "--impersonate", "chrome",
                 "--quiet",
                 "-o", output_template,
             ]
