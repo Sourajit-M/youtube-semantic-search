@@ -69,30 +69,17 @@ def fetch_transcript(video_id: str) -> Optional[str]:
                 print(f"Auto-detected and using YouTube cookies from: {p}")
                 break
 
-    # Build requests session (prefer curl-cffi to bypass TLS fingerprint blocks)
     try:
-        from curl_cffi.requests import Session as CurlSession
-        session = CurlSession(impersonate="chrome")
-        print("Using browser-grade curl-cffi Session to bypass TLS blocks.")
-    except ImportError:
-        session = requests.Session()
-        print("Using standard requests Session.")
-
-    if cookies_path:
+        # Attempt 1a: Try anonymous fetch using youtube_transcript_api + curl-cffi first
+        # This is extremely successful for public videos on Hugging Face as it has browser-grade
+        # TLS/headers but completely avoids Google's session hijack locks that trigger on datacenter IPs!
         try:
-            cj = http.cookiejar.MozillaCookieJar()
-            cj.load(str(cookies_path), ignore_discard=True, ignore_expires=True)
-            session.cookies = cj
-            print(f"Successfully loaded browser cookies into Session.")
-        except Exception as cookie_err:
-            print(f"Could not load cookies into Session: {cookie_err}")
-
-    try:
-        # Attempt 1: Try using the lightweight youtube_transcript_api first
-        try:
+            from curl_cffi.requests import Session as CurlSession
+            print(f"Attempting anonymous fetch for {video_id} using Chrome-impersonated curl-cffi Session...")
+            anon_session = CurlSession(impersonate="chrome")
+            
             from youtube_transcript_api import YouTubeTranscriptApi
-            print(f"Attempting to fetch transcript for {video_id} using youtube_transcript_api...")
-            api_instance = YouTubeTranscriptApi(http_client=session) if session else YouTubeTranscriptApi()
+            api_instance = YouTubeTranscriptApi(http_client=anon_session)
             transcript_list = api_instance.fetch(video_id, languages=['en'])
             
             seen: set[str] = set()
@@ -109,10 +96,68 @@ def fetch_transcript(video_id: str) -> Optional[str]:
                         lines.append(f"[t={start_sec}] {line}")
             
             if lines:
-                print(f"Successfully fetched transcript using youtube_transcript_api.")
+                print(f"Successfully fetched transcript anonymously.")
                 return ' '.join(lines)
-        except Exception as e:
-            print(f"youtube-transcript-api failed for {video_id}: {e}")
+        except Exception as anon_err:
+            print(f"Anonymous youtube-transcript-api fetch failed for {video_id}: {anon_err}")
+
+        # Attempt 1b: Try authenticated fetch with cookies if anonymous fetch failed
+        if cookies_path:
+            try:
+                from curl_cffi.requests import Session as CurlSession
+                print(f"Attempting authenticated fetch for {video_id} with cookies...")
+                auth_session = CurlSession(impersonate="chrome")
+                cj = http.cookiejar.MozillaCookieJar()
+                cj.load(str(cookies_path), ignore_discard=True, ignore_expires=True)
+                auth_session.cookies = cj
+                
+                from youtube_transcript_api import YouTubeTranscriptApi
+                api_instance = YouTubeTranscriptApi(http_client=auth_session)
+                transcript_list = api_instance.fetch(video_id, languages=['en'])
+                
+                seen: set[str] = set()
+                lines: list[str] = []
+                for entry in transcript_list:
+                    start_sec = int(entry.start)
+                    text = entry.text.strip()
+                    # Remove HTML tags if any
+                    text = re.sub(r'<[^>]+>', '', text)
+                    for line in text.splitlines():
+                        line = line.strip()
+                        if line and line not in seen:
+                            seen.add(line)
+                            lines.append(f"[t={start_sec}] {line}")
+                
+                if lines:
+                    print(f"Successfully fetched transcript using authenticated cookies.")
+                    return ' '.join(lines)
+            except Exception as auth_err:
+                print(f"Authenticated youtube-transcript-api fetch failed for {video_id}: {auth_err}")
+        else:
+            # Standard requests fallback in case curl-cffi is not used
+            try:
+                from youtube_transcript_api import YouTubeTranscriptApi
+                print(f"Attempting standard requests anonymous fetch for {video_id}...")
+                transcript_list = YouTubeTranscriptApi().fetch(video_id, languages=['en'])
+                
+                seen: set[str] = set()
+                lines: list[str] = []
+                for entry in transcript_list:
+                    start_sec = int(entry.start)
+                    text = entry.text.strip()
+                    # Remove HTML tags if any
+                    text = re.sub(r'<[^>]+>', '', text)
+                    for line in text.splitlines():
+                        line = line.strip()
+                        if line and line not in seen:
+                            seen.add(line)
+                            lines.append(f"[t={start_sec}] {line}")
+                
+                if lines:
+                    print(f"Successfully fetched transcript using standard requests anonymous fetch.")
+                    return ' '.join(lines)
+            except Exception as std_err:
+                print(f"Standard requests anonymous fetch failed for {video_id}: {std_err}")
 
         # Attempt 2: Fall back to yt-dlp
         print(f"Falling back to yt-dlp for {video_id}...")
