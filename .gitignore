@@ -7,6 +7,9 @@ data/
 *.pkl
 cookies.txt
 *cookies.txt
+local_ingest.py
+data.zip
+temp_data.zip
 
 # Python
 __pycache__/

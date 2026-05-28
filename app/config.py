@@ -58,6 +58,50 @@ class Settings(BaseSettings):
     return models.get(self.llm_fallback_provider, self.gemini_model)
 
   def ensure_data_dirs(self) -> None:
+    # Auto-reconstruct data.zip from split base64 text files if they exist
+    import base64
+    import zipfile
+    
+    parts = [Path("data_part1.txt"), Path("data_part2.txt"), Path("data_part3.txt")]
+    if all(p.exists() for p in parts):
+      if not self.sqlite_db_path.exists() or not self.chroma_db_path.exists():
+        print("Reconstructing pre-indexed RAG database from text parts...")
+        try:
+          # Concatenate the base64 parts
+          encoded_str = ""
+          for p in parts:
+            encoded_str += p.read_text(encoding="ascii")
+          
+          # Decode base64 bytes
+          zip_data = base64.b64decode(encoded_str)
+          
+          # Write temporary data.zip
+          temp_zip_path = Path("temp_data.zip")
+          temp_zip_path.write_bytes(zip_data)
+          
+          # Extract zip
+          with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
+            zip_ref.extractall(".")
+          print("RAG database reconstruction and extraction complete.")
+          
+          # Clean up temporary zip file
+          if temp_zip_path.exists():
+            temp_zip_path.unlink()
+        except Exception as e:
+          print(f"Error reconstructing RAG database: {e}")
+
+    # Fallback to direct data.zip if present (for local testing flexibility)
+    zip_path = Path("data.zip")
+    if zip_path.exists():
+      if not self.sqlite_db_path.exists() or not self.chroma_db_path.exists():
+        print(f"Extracting pre-indexed RAG database from {zip_path}...")
+        try:
+          with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(".")
+          print("RAG database extraction complete.")
+        except Exception as e:
+          print(f"Error extracting RAG database from {zip_path}: {e}")
+
     self.chroma_db_path.parent.mkdir(parents=True, exist_ok=True)
     self.sqlite_db_path.parent.mkdir(parents=True, exist_ok=True)
     self.bm25_index_path.parent.mkdir(parents=True, exist_ok=True)

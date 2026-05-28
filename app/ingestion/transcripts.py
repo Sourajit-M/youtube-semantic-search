@@ -38,7 +38,6 @@ def fetch_transcript(video_id: str) -> Optional[str]:
             content_to_write += "\n"
 
             # Create a temporary file to hold the cookies
-            import tempfile
             fd, temp_path = tempfile.mkstemp(suffix=".txt", prefix="hf_cookies_")
             with os.fdopen(fd, 'w', encoding='utf-8') as f:
                 f.write(content_to_write)
