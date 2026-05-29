@@ -33,6 +33,7 @@ COPY app/ ./app/
 COPY eval/ ./eval/
 COPY main.py ./
 COPY start.sh ./
+COPY data_part1.txt data_part2.txt data_part3.txt ./
 RUN chmod +x start.sh
 
 # Make venv the active Python
