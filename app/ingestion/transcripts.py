@@ -20,6 +20,73 @@ def fetch_transcript(video_id: str) -> Optional[str]:
     from app.config import get_settings
     settings = get_settings()
 
+    # 0. Try fetching via Supadata API first if API key is provided
+    supadata_key = os.environ.get("SUPADATA_API_KEY", "") or getattr(settings, "supadata_api_key", "")
+    if supadata_key.strip():
+        print(f"Attempting Supadata API fetch for video {video_id}...")
+        try:
+            url = f"https://api.supadata.ai/v1/transcript?url=https://www.youtube.com/watch?v={video_id}&text=false"
+            headers = {"x-api-key": supadata_key.strip()}
+            response = requests.get(url, headers=headers, timeout=30)
+            if response.status_code == 200:
+                data = response.json()
+                content = data.get("content", [])
+                if isinstance(content, list):
+                    seen = set()
+                    lines = []
+                    for entry in content:
+                        text = entry.get("text", "").strip()
+                        offset_ms = entry.get("offset", 0)
+                        start_sec = int(offset_ms / 1000)
+                        text = re.sub(r'<[^>]+>', '', text)
+                        for line in text.splitlines():
+                            line = line.strip()
+                            if line and line not in seen:
+                                seen.add(line)
+                                lines.append(f"[t={start_sec}] {line}")
+                    if lines:
+                        print("Successfully fetched transcript via Supadata API.")
+                        return ' '.join(lines)
+            elif response.status_code == 202:
+                job_data = response.json()
+                job_id = job_data.get("jobId")
+                if job_id:
+                    print(f"Supadata transcript processing started. Polling job {job_id}...")
+                    import time
+                    poll_url = f"https://api.supadata.ai/v1/transcript/{job_id}"
+                    for _ in range(10):
+                        time.sleep(3)
+                        poll_resp = requests.get(poll_url, headers=headers, timeout=15)
+                        if poll_resp.status_code == 200:
+                            poll_data = poll_resp.json()
+                            status = poll_data.get("status")
+                            if status == "completed" or "content" in poll_data:
+                                content = poll_data.get("content", [])
+                                if isinstance(content, list):
+                                    seen = set()
+                                    lines = []
+                                    for entry in content:
+                                        text = entry.get("text", "").strip()
+                                        offset_ms = entry.get("offset", 0)
+                                        start_sec = int(offset_ms / 1000)
+                                        text = re.sub(r'<[^>]+>', '', text)
+                                        for line in text.splitlines():
+                                            line = line.strip()
+                                            if line and line not in seen:
+                                                seen.add(line)
+                                                lines.append(f"[t={start_sec}] {line}")
+                                    if lines:
+                                        print("Successfully fetched transcript via Supadata API after polling.")
+                                        return ' '.join(lines)
+                                break
+                            elif status == "failed":
+                                print("Supadata async job failed.")
+                                break
+            else:
+                print(f"Supadata API fetch returned status code {response.status_code}: {response.text}")
+        except Exception as e:
+            print(f"Supadata API fetch failed with exception: {e}")
+
     # 1. Resolve and load cookies if configured or auto-detected
     cookies_path = None
     cookies_added = False

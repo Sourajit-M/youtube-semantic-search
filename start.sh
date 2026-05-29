@@ -14,4 +14,4 @@ echo "API is up!"
 
 # Start Streamlit in the foreground
 echo "Starting Streamlit frontend..."
-streamlit run main.py --server.port 7860 --server.address 0.0.0.0
+streamlit run main.py --server.port "${PORT:-7860}" --server.address 0.0.0.0

@@ -33,13 +33,13 @@ COPY app/ ./app/
 COPY eval/ ./eval/
 COPY main.py ./
 COPY start.sh ./
-COPY data_part1.txt data_part2.txt data_part3.txt ./
+COPY data.zip ./
 RUN chmod +x start.sh
 
 # Make venv the active Python
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
 
-# Hugging Face Spaces uses 7860 by default
+# Render uses dynamic PORT, falling back to 7860
 EXPOSE 7860
 CMD ["./start.sh"]
