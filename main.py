@@ -343,24 +343,27 @@ def channels_page():
       ingest_clicked = st.button("Add channel & ingest ↗", type="primary")
 
       if ingest_clicked and new_channel.strip():
-          progress = st.progress(0, text="Resolving channel...")
-          with st.spinner(f"Ingesting {new_channel} — this takes 30-60s per video..."):
-              progress.progress(20, text="Fetching video list...")
+          with st.status(f"Resolving and ingesting {new_channel}...", expanded=True) as status:
+              status.write("Connecting to YouTube ingestion engine...")
               result = add_channel(new_channel.strip(), max_vids)
-              progress.progress(100, text="Done!")
-
-          if not result or "error" in result:
-              st.error(f"Failed: {result.get('error', 'Unknown')}")
-          else:
-              st.success(
-                  f"✓ {result['channel_name']} added — "
-                  f"{result['videos_ingested']} videos ingested, "
-                  f"{result['videos_failed']} failed"
-              )
-              # Clear cache so sidebar updates
-              get_health.clear()
-              get_channels.clear()
-              st.rerun()
+              
+              if not result or "error" in result:
+                  status.update(label="Ingestion failed!", state="error", expanded=True)
+                  st.error(f"Failed: {result.get('error', 'Unknown')}")
+              else:
+                  status.update(label=f"Ingestion complete: {result['channel_name']}!", state="complete", expanded=False)
+                  st.success(
+                      f"✓ {result['channel_name']} added — "
+                      f"{result['videos_ingested']} videos ingested, "
+                      f"{result['videos_failed']} failed"
+                  )
+                  # Clear cache so sidebar updates
+                  get_health.clear()
+                  get_channels.clear()
+                  # Pause briefly so user can see success before reload
+                  import time
+                  time.sleep(2.0)
+                  st.rerun()
 
       elif ingest_clicked:
           st.warning("Please enter a channel handle or URL.")
@@ -485,8 +488,10 @@ def channels_page():
                                            help="Index this video now"):
                                   with st.spinner(f"Indexing {v['title']}..."):
                                       if ingest_single_video(v["youtube_id"]):
-                                          st.success(f"Indexed {v['title']}")
+                                          st.success(f"✓ Indexed {v['title']} successfully!")
                                           get_health.clear()
+                                          import time
+                                          time.sleep(1.5)
                                           st.rerun()
                                       else:
                                           st.error("Indexing failed")
