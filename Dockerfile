@@ -1,34 +1,41 @@
 FROM ghcr.io/astral-sh/uv:latest AS uv_bin
-FROM python:3.11-slim AS builder
 
+# ── Stage 1: Build the React frontend ──
+FROM node:20-slim AS frontend-builder
+WORKDIR /app/frontend
+# Copy package manifests (optional wildcard for package-lock)
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm install
+COPY frontend/ ./
+RUN npm run build
+
+# ── Stage 2: Build Python dependencies ──
+FROM python:3.11-slim AS python-builder
 WORKDIR /app
-
-# Enable bytecode compilation
 ENV UV_COMPILE_BYTECODE=1
-# Copy uv from official image
 COPY --from=uv_bin /uv /uvx /bin/
 
-# Install build dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
+# ── Stage 3: Runtime container ──
 FROM python:3.11-slim AS runtime
-
 WORKDIR /app
 
-# Install runtime dependencies (ffmpeg for audio processing, curl for health checks, nodejs for yt-dlp)
+# Install runtime dependencies (ffmpeg for audio, curl for health checks, nodejs for yt-dlp)
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
     nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/.venv /app/.venv 
+# Copy virtual environment, React static build, and Python modules
+COPY --from=python-builder /app/.venv /app/.venv 
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 COPY app/ ./app/
 COPY eval/ ./eval/
 COPY main.py ./
@@ -36,10 +43,10 @@ COPY start.sh ./
 COPY data.zip ./
 RUN chmod +x start.sh
 
-# Make venv the active Python
+# Make venv active
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
 
-# Render uses dynamic PORT, falling back to 7860
-EXPOSE 7860
-CMD ["./start.sh"]
+# Render standard port exposure
+EXPOSE 8000
+CMD ["./start.sh"]

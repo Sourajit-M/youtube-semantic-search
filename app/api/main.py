@@ -1,7 +1,9 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import channels, health, search
 from app.config import get_settings
@@ -67,6 +69,10 @@ def create_app() -> FastAPI:
   app.include_router(health.router, tags=["health"])
   app.include_router(channels.router, tags=["channels"])
   app.include_router(search.router, tags=["search"])
+
+  # Serve React + Vite compiled SPA frontend if it exists
+  if os.path.exists("frontend/dist"):
+    app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
 
   return app
 
