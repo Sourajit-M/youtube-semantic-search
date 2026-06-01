@@ -12,6 +12,7 @@ while ! curl --silent --fail http://localhost:8000/health > /dev/null; do
 done
 echo "API is up!"
 
-# Start Streamlit in the foreground
-echo "Starting Streamlit frontend..."
-streamlit run main.py --server.port "${PORT:-7860}" --server.address 0.0.0.0
+# Start React + Vite frontend
+echo "Starting React + Vite frontend..."
+cd frontend
+npm run dev -- --host 0.0.0.0 --port "${PORT:-5173}"

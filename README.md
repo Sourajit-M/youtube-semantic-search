@@ -77,7 +77,8 @@ cp .env.example .env
 uv run uvicorn app.api.main:app --reload --port 8000
 
 # Start UI
-uv run streamlit run main.py --server.port 8501
+cd frontend
+npm run dev
 ```
 
 ## 🕹️ Usage Examples
