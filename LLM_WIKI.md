@@ -407,21 +407,24 @@ Input string
 
 **File:** `app/ingestion/transcripts.py`
 
-Downloads transcripts using `yt-dlp` (not the YouTube API, which has limited transcript access).
+Uses a multi-layered extraction architecture designed to succeed both locally and in cloud server environments:
 
-**Command used:**
-```bash
-yt-dlp --write-auto-sub --write-sub --sub-lang en --sub-format vtt \
-       --skip-download --js-runtimes node --quiet -o <tmpdir>/<id>.vtt <url>
-```
+1. **Primary Strategy (Cloud Ingestion):** Uses the **Supadata API** if `SUPADATA_API_KEY` is configured. Supadata rotates residential proxies and automated browsers to bypass YouTube's datacenter blocks, successfully returning timestamped transcript offsets. It includes built-in polling support for asynchronous `202 Accepted` requests.
+2. **Fallback Chain:**
+   * **Chrome-Impersonated HTTP Session:** Uses `curl_cffi` to mimic Chrome TLS fingerprints and headers, allowing anonymous fetches without Google session hijacks.
+   * **Authenticated Cookies:** Loads YouTube browser cookies (either from the `YOUTUBE_COOKIES_CONTENT` environment secret, local settings path, or auto-detected local files) to make authenticated API requests.
+   * **yt-dlp Command-line Extraction:** Executes `yt-dlp` in a temporary directory:
+     ```bash
+     yt-dlp --write-auto-sub --write-sub --sub-lang en --sub-format vtt \
+            --skip-download --js-runtimes node --quiet -o <tmpdir>/<id>.vtt <url>
+     ```
 
-**Priority:** Manual subtitles preferred over auto-generated captions (`--write-sub` before `--write-auto-sub`).
+**Priority:** Manual subtitles are always preferred over auto-generated captions.
 
-**VTT parsing (`_parse_vtt`):**
+**VTT/JSON Parsing:**
 1. Decodes bytes as UTF-8 with `errors='replace'` (handles Windows encoding issues).
-2. Iterates `webvtt` captions, strips HTML tags (`<c>`, `<00:00:01>` etc.).
-3. Deduplicates lines using a `seen` set (auto-captions repeat lines across cue boundaries).
-4. Joins all unique lines into a single space-separated string.
+2. Parses caption blocks (e.g. `webvtt` files or Supadata JSON payloads) to extract starting timestamps (`[t=seconds]` tags).
+3. Strips HTML formatting, deduplicates recurring subtitles, and joins all lines into a space-separated sequence.
 
 **Transcript validation:** Transcripts shorter than 50 words are rejected as too short to produce meaningful chunks.
 
@@ -653,6 +656,7 @@ All settings in `.env`. Loaded via `pydantic-settings` (type-safe, validated).
 | `GROQ_API_KEY` | — | Required for Groq |
 | `GEMINI_API_KEY` | — | Required for Gemini fallback |
 | `YOUTUBE_API_KEY` | — | YouTube Data API v3 key |
+| `SUPADATA_API_KEY` | — | Required for cloud-based transcript fetching to bypass YouTube datacenter blocks |
 | `CHUNK_SIZE` | `300` | Words per chunk |
 | `CHUNK_OVERLAP` | `50` | Overlap words between chunks |
 | `TOP_K_RESULTS` | `5` | Default chunks retrieved per query |
@@ -730,6 +734,9 @@ Local-first, zero-infrastructure metadata store. SQLModel (SQLAlchemy under the 
 ### Why yt-dlp over the YouTube Transcript API?
 `yt-dlp` handles auto-generated captions, multiple subtitle tracks, and encoding quirks. The YouTube Transcript API is simpler but fails on many channels (disabled captions, rate limits, regional restrictions).
 
+### Why Supadata API in the cloud?
+When deployed to cloud servers (such as Render.com), YouTube actively blocks datacenter IP addresses from fetching transcripts directly. Bypassing these blocks requires rotating residential proxy networks, cookie session handling, and captcha solving. Supadata API handles this proxying and bot-bypass logic natively under the hood, ensuring reliable dynamic ingestion for cloud-based SaaS apps.
+
 ---
 
 ## 12. Glossary
@@ -755,35 +762,36 @@ Local-first, zero-infrastructure metadata store. SQLModel (SQLAlchemy under the 
 
 ---
 
-## 13. Deployment Guide (Free)
+## 13. Deployment Guide (Render.com Production Service)
 
-The easiest way to deploy this app for free is using **Hugging Face Spaces** with Docker.
+The recommended way to deploy this application as a real-world SaaS product is on **Render.com** with **Docker** and a **Persistent Volume**.
 
-### Step 1: Prepare the Repository
-Ensure your repository contains:
-- `Dockerfile` (configured to run both API and UI)
-- `start.sh` (entry point script)
-- `pyproject.toml` and `uv.lock`
+### Step 1: Create a Web Service
+1. Log in to your [Render.com Dashboard](https://dashboard.render.com).
+2. Click **New +** ➔ **Web Service**.
+3. Connect your GitHub repository: `youtube-rag-project`.
+4. Configure the Service parameters:
+   - **Name**: `youtube-rag-engine`
+   - **Runtime**: **Docker** (Render will auto-detect your `Dockerfile`)
+   - **Instance Type**: Select **Free** (or Starter for higher CPU/RAM)
 
-### Step 2: Create a Hugging Face Space
-1. Go to [huggingface.co/new-space](https://huggingface.co/new-space).
-2. Give your Space a name.
-3. Select **Docker** as the SDK.
-4. Choose the "Blank" template.
-5. Set the Space to **Public** or **Private**.
+### Step 2: Configure Environment Variables
+Under the **Environment** tab, configure the following variables:
+- `LLM_PROVIDER`: `groq` (or `gemini`)
+- `GROQ_API_KEY`: *Your Groq API key*
+- `GEMINI_API_KEY`: *Your Gemini API key*
+- `SUPADATA_API_KEY`: *Your Supadata API key* (Required for dynamic transcript retrieval)
+- `YOUTUBE_API_KEY`: *Your YouTube Data API v3 key* (Optional but recommended)
 
-### Step 3: Configure Environment Variables
-In your Space settings, add the following secrets:
-- `GROQ_API_KEY`: Your Groq API key.
-- `GEMINI_API_KEY`: Your Gemini API key.
-- `YOUTUBE_API_KEY`: Your YouTube Data API v3 key.
-- `API_URL`: Set to `http://localhost:8000` (internal container URL).
+### Step 3: Add a Persistent Disk (For SaaS database persistence)
+Render containers are ephemeral and will lose dynamic database updates during restarts. To make ingestion persistent:
+1. Click **Disks** ➔ **Add Disk**.
+2. **Name**: `rag-database-storage`
+3. **Mount Path**: `/app/data`
+4. **Size**: `1 GB` (or larger)
+5. Save the disk settings. Render will automatically redeploy the container with the persistent storage disk attached.
 
-### Step 4: Push to Hugging Face
-Link your GitHub repository or upload the files directly. Hugging Face will automatically build the Docker image and start the services.
-
-### Alternative: Render.com (Free Tier)
-1. Deploy the FastAPI backend as a **Web Service**.
-2. Deploy the Streamlit frontend as another **Web Service**.
-3. Point the frontend to the backend's URL via the `API_URL` environment variable.
-*Note: Render's free tier spins down after inactivity, causing a slow initial load.*
+### Alternative: Hugging Face Spaces (Docker SDK)
+1. Create a Space on [huggingface.co/new-space](https://huggingface.co/new-space) and select **Docker** as the SDK.
+2. In Space settings, configure your API keys as secrets.
+3. *Note: Hugging Face Spaces storage is ephemeral, meaning dynamic video additions are lost on container rebuilds or idle pauses.*
