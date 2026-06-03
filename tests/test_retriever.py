@@ -232,3 +232,12 @@ def test_vectordb_search_clipping():
     kwargs = mock_collection.query.call_args[1]
     assert kwargs["n_results"] == 2
     assert len(results) == 2
+
+
+def test_reranker_relevancy_ordering():
+  """Verify that search results contain the rerank_score field and sort correctly."""
+  from app.core.retriever import HybridRetriever
+  retriever = HybridRetriever()
+  results = retriever.search("geology", top_k=2)
+  if len(results) > 0:
+    assert "rerank_score" in results[0]

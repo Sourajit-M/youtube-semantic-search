@@ -244,24 +244,43 @@ class HybridRetriever:
     if top_k is None:
       top_k = self._settings.top_k_results
 
-    candidates = top_k * 2
+    # Retrieve top-20 candidates from RRF to feed into the reranker
+    rrf_candidates_count = 20
 
     query_embedding = self._embedder.embed_one(query)
 
     bm25_results = self._bm25.search(
       query=query,
-      top_k=candidates,
+      top_k=rrf_candidates_count,
       channel_name=channel_name,
     )
 
     vector_results = self._vectordb.search(
       query_embedding=query_embedding,
-      top_k=candidates,
+      top_k=rrf_candidates_count,
       channel_name=channel_name,
     )
 
-    return reciprocal_rank_fusion(
+    rrf_results = reciprocal_rank_fusion(
       bm25_results=bm25_results,
       vector_results=vector_results,
-      top_k=top_k,
+      top_k=rrf_candidates_count,
     )
+
+    if not rrf_results:
+      return []
+
+    # Two-Stage Reranking
+    from app.core.reranker import get_reranker
+    reranker = get_reranker()
+
+    texts = [r["text"] for r in rrf_results]
+    scores = reranker.score(query, texts)
+
+    for r, score in zip(rrf_results, scores):
+      r["rerank_score"] = score
+
+    # Sort candidates by rerank_score descending
+    reranked_results = sorted(rrf_results, key=lambda x: x["rerank_score"], reverse=True)
+
+    return reranked_results[:top_k]

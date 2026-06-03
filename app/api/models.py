@@ -54,6 +54,7 @@ class SearchResult(BaseModel):
   channel_name: str
   text: str
   rrf_score: float
+  rerank_score : Optional[float] = None
   chunk_index: int
   start_second: int = 0
 
