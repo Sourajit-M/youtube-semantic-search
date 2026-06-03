@@ -8,7 +8,8 @@ litellm.set_verbose = False
 def call_llm(
   prompt: str,
   system_prompt: str = "You are a helpful assistant that answers questions based on provided context.",
-  temperature: float = 0.2
+  temperature: float = 0.2,
+  response_format: dict | None = None
 ) -> str:
   
   settings = get_settings()
@@ -22,6 +23,7 @@ def call_llm(
       messages=messages,
       temperature=temperature,
       max_tokens=1024,
+      response_format=response_format,
     )
     return response.choices[0].message.content.strip()
 
@@ -36,6 +38,7 @@ def call_llm(
         messages=messages,
         temperature=temperature,
         max_tokens=1024,
+        response_format=response_format,
       )
       return response.choices[0].message.content.strip()
     

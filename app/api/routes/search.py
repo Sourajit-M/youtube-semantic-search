@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 
 from app.api.models import (
-  AskRequest, AskResponse, SearchRequest, SearchResponse, SearchResult, SourceVideo
+  AskRequest, AskResponse, SearchRequest, SearchResponse, SearchResult, SourceVideo, CitationModel
 )
 from app.config import get_settings
 
@@ -24,6 +24,9 @@ def ask(request: AskRequest, req: Request):
       answer = response.answer,
       sources = [
         SourceVideo(**s) for s in response.sources
+      ],
+      citations = [
+        CitationModel(**c) for c in response.citations  # <-- Added mapping
       ],
       chunks_used = response.chunks_used,
       provider = settings.active_llm_model,

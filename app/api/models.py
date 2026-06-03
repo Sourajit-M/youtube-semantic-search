@@ -40,10 +40,15 @@ class SourceVideo(BaseModel):
   rrf_score: float
   start_second: int = 0
 
+class CitationModel(BaseModel):
+  video_id: str
+  video_title: str
+  quote: str
 
 class AskResponse(BaseModel):
   answer: str
   sources: list[SourceVideo]
+  citations: list[CitationModel]
   chunks_used: int
   provider: str
 
