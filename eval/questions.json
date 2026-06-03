@@ -1,32 +1,122 @@
 [
   {
     "id": "q01",
-    "question": "How was the Earth formed?",
+    "question": "What is geology and why does it matter?",
+    "expected_source": "Intro to Geology: Crash Course Geology #1",
+    "keywords": ["geology", "earth", "science"]
+  },
+  {
+    "id": "q02",
+    "question": "How did Earth form?",
     "expected_source": "How did Earth form?: Crash Course Geology #2",
     "keywords": ["solar system", "gas", "dust", "4.6 billion"]
   },
   {
-    "id": "q02",
+    "id": "q03",
     "question": "What is the difference between the crust and the mantle?",
     "expected_source": "Earth's Crust and Mantle Explained: Crash Course Geology #3",
     "keywords": ["crust", "mantle", "layers"]
   },
   {
-    "id": "q03",
+    "id": "q04",
     "question": "What causes earthquakes and volcanic activity?",
     "expected_source": "Intro to Geology: Crash Course Geology #1",
     "keywords": ["plate", "tectonic", "seismic"]
-  },
-  {
-    "id": "q04",
-    "question": "What is geology and why does it matter?",
-    "expected_source": "Intro to Geology: Crash Course Geology #1",
-    "keywords": ["geology", "earth", "science"]
   },
   {
     "id": "q05",
     "question": "How do scientists study the interior of the Earth?",
     "expected_source": "Earth's Crust and Mantle Explained: Crash Course Geology #3",
     "keywords": ["seismic", "waves", "interior"]
+  },
+  {
+    "id": "q06",
+    "question": "What layers make up the Earth's geosphere?",
+    "expected_source": "Earth's Crust and Mantle Explained: Crash Course Geology #3",
+    "keywords": ["crust", "mantle"]
+  },
+  {
+    "id": "q07",
+    "question": "How long ago did the solar system form?",
+    "expected_source": "How did Earth form?: Crash Course Geology #2",
+    "keywords": ["4.6 billion"]
+  },
+  {
+    "id": "q08",
+    "question": "What processes are active in geology?",
+    "expected_source": "Intro to Geology: Crash Course Geology #1",
+    "keywords": ["tectonic", "seismic"]
+  },
+  {
+    "id": "q09",
+    "question": "What lies directly beneath the crust of the Earth?",
+    "expected_source": "Earth's Crust and Mantle Explained: Crash Course Geology #3",
+    "keywords": ["mantle"]
+  },
+  {
+    "id": "q10",
+    "question": "What is Earth's crust made of?",
+    "expected_source": "Earth's Crust and Mantle Explained: Crash Course Geology #3",
+    "keywords": ["silicate", "crust"]
+  },
+  {
+    "id": "q11",
+    "question": "From what did the solar system coalesce?",
+    "expected_source": "How did Earth form?: Crash Course Geology #2",
+    "keywords": ["gas", "dust"]
+  },
+  {
+    "id": "q12",
+    "question": "How do earthquakes help map the Earth's interior?",
+    "expected_source": "Earth's Crust and Mantle Explained: Crash Course Geology #3",
+    "keywords": ["seismic", "waves"]
+  },
+  {
+    "id": "q13",
+    "question": "What are tectonic plates responsible for?",
+    "expected_source": "Intro to Geology: Crash Course Geology #1",
+    "keywords": ["earthquakes", "volcanic"]
+  },
+  {
+    "id": "q14",
+    "question": "Why is geology important to human society?",
+    "expected_source": "Intro to Geology: Crash Course Geology #1",
+    "keywords": ["resources", "study"]
+  },
+  {
+    "id": "q15",
+    "question": "What is the physical state of the Earth's crust?",
+    "expected_source": "Earth's Crust and Mantle Explained: Crash Course Geology #3",
+    "keywords": ["solid"]
+  },
+  {
+    "id": "q16",
+    "question": "What is a neural network?",
+    "expected_source": "But what is a neural network? | 3Blue1Brown",
+    "keywords": ["biological", "brain", "model"]
+  },
+  {
+    "id": "q17",
+    "question": "How are neurons arranged in a neural network?",
+    "expected_source": "But what is a neural network? | 3Blue1Brown",
+    "keywords": ["layers"]
+  },
+  {
+    "id": "q18",
+    "question": "What parameters determine neuron activations?",
+    "expected_source": "But what is a neural network? | 3Blue1Brown",
+    "keywords": ["weights", "biases"]
+  },
+  {
+    "id": "q19",
+    "question": "What inspired the structure of artificial neural networks?",
+    "expected_source": "But what is a neural network? | 3Blue1Brown",
+    "keywords": ["biological", "brain"]
+  },
+  {
+    "id": "q20",
+    "question": "How do weights and biases affect network layers?",
+    "expected_source": "But what is a neural network? | 3Blue1Brown",
+    "keywords": ["activations"]
   }
 ]
