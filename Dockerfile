@@ -24,7 +24,6 @@ RUN uv sync --frozen --no-dev
 
 # Pre-download FastEmbed models to bake them into the image, bypassing runtime HF requests
 ENV FASTEMBED_CACHE_PATH=/app/fastembed_cache
-ENV HF_ENDPOINT=https://hf-mirror.com
 RUN .venv/bin/python -c "from fastembed import TextEmbedding; from fastembed.rerank.cross_encoder import TextCrossEncoder; TextEmbedding(); TextCrossEncoder(model_name='Xenova/ms-marco-MiniLM-L-6-v2')"
 
 # ── Stage 3: Runtime container ──
