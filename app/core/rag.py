@@ -52,7 +52,7 @@ def _build_prompt(query: str, chunks: list[dict]) -> str:
     mins = start_sec // 60
     secs = start_sec % 60
     time_str = f"{mins}:{secs:02d}"
-    block = f"[Source: {chunk['video_title']} at {time_str}]\n{chunk['text']}"
+    block = f"[Source: {chunk['video_title']} (ID: {chunk['video_youtube_id']}) at {time_str}]\n{chunk['text']}"
     context_blocks.append(block)
 
   context = "\n\n".join(context_blocks)
