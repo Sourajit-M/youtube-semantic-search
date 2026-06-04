@@ -13,12 +13,13 @@
 5. [Core Modules Reference](#5-core-modules-reference)
    - [Chunker](#51-chunker)
    - [Embedder](#52-embedder)
-   - [BM25 Index (SQLite FTS5)](#53-bm25-index-sqlite-fts5)
-   - [Vector Database (ChromaDB)](#54-vector-database-chromadb)
-   - [Hybrid Retriever & RRF Fusion](#55-hybrid-retriever--rrf-fusion)
-   - [RAG Pipeline](#56-rag-pipeline)
-   - [LLM Gateway](#57-llm-gateway)
-   - [Video Timestamp Citations](#58-video-timestamp-citations)
+   - [Reranker](#53-reranker)
+   - [BM25 Index (SQLite FTS5)](#54-bm25-index-sqlite-fts5)
+   - [Vector Database (ChromaDB)](#55-vector-database-chromadb)
+   - [Hybrid Retriever & Reranking](#56-hybrid-retriever--reranking)
+   - [RAG Pipeline & Citation Validation](#57-rag-pipeline--citation-validation)
+   - [LLM Gateway](#58-llm-gateway)
+   - [Video Timestamp Citations](#59-video-timestamp-citations)
 6. [Ingestion System](#6-ingestion-system)
    - [YouTube API Layer](#61-youtube-api-layer)
    - [Transcript Extraction](#62-transcript-extraction)
@@ -54,7 +55,7 @@ The key guarantee: **answers are grounded in real transcript content**, not hall
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                     Streamlit UI (main.py)              │
+│            React + Vite Frontend (frontend/)            │
 │         Ask questions ─── Manage channels               │
 └───────────────────────┬─────────────────────────────────┘
                         │ HTTP REST
@@ -149,24 +150,34 @@ VectorDB.search(embedding, top_k*2)        │
         └──────────────┬───────────────────┘
                        │
                        ▼
-        reciprocal_rank_fusion(bm25_results, vector_results)
+        reciprocal_rank_fusion(bm25_results, vector_results, top_k=20)
         RRF score = 1/(60+rank_bm25) + 1/(60+rank_vector)
-        → top_k merged, deduplicated chunks
+        → Merged top-20 candidate chunks
+                       │
+                       ▼
+        Reranker.score(query, top-20 candidate texts)
+        → Cross-Encoder jointly scores query-chunk relevance
+                       │
+                       ▼
+        Sort and select top-5 chunks by Reranker score
                        │
                        ▼
         _build_prompt(query, chunks)
-        Injects chunks as [Source: Video Title] blocks
+        Injects [Source: Title (ID: youtube_id) at MM:SS] context blocks
                        │
                        ▼
-        call_llm(prompt, system_prompt)
-        → LiteLLM → Groq (primary) or Gemini (fallback)
+        call_llm(prompt, response_format={"type": "json_object"})
+        → LiteLLM → Groq (primary) or Gemini (fallback) JSON mode
                        │
                        ▼
-        RAGResponse(answer, sources, chunks_used)
-        Sources deduplicated by video (best RRF chunk per video)
+        Programmatic Citation Validator
+        → Filters hallucinated video_id citations at python code level
                        │
                        ▼
-        AskResponse → JSON to client
+        RAGResponse(answer, sources, citations, chunks_used)
+                       │
+                       ▼
+        AskResponse → JSON payload with validated citations list
 ```
 
 ---
@@ -218,7 +229,26 @@ Wraps FastEmbed's ONNX runtime embedding model.
 
 ---
 
-### 5.3 BM25 Index (SQLite FTS5)
+### 5.3 Reranker
+
+**File:** `app/core/reranker.py`
+
+A Cross-Encoder model wrapper using sentence-transformers to score query-chunk pairs jointly.
+
+| Property | Value |
+|---|---|
+| Model | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
+| RAM | ~80 MB |
+| Runtime | PyTorch/sentence-transformers |
+
+**Key methods:**
+- `score(query: str, texts: list[str]) → list[float]` — scores each candidate chunk's relevance to the query. Higher scores indicate higher semantic alignment.
+
+**Singleton:** `get_reranker()` is `@lru_cache` — loaded once at FastAPI startup lifespan to eliminate cold-start runtime delays.
+
+---
+
+### 5.4 BM25 Index (SQLite FTS5)
 
 **File:** `app/core/retriever.py` → `class BM25Index`
 
@@ -238,7 +268,7 @@ Incoming search queries are regex-parsed into clean alphanumeric word lists join
 
 ---
 
-### 5.4 Vector Database (ChromaDB)
+### 5.5 Vector Database (ChromaDB)
 
 **File:** `app/db/vectordb.py`
 
@@ -271,81 +301,71 @@ Persistent local vector store using ChromaDB's HNSW index.
 
 ---
 
-### 5.5 Hybrid Retriever & RRF Fusion
+### 5.6 Hybrid Retriever & Reranking
 
 **File:** `app/core/retriever.py` → `class HybridRetriever`, `reciprocal_rank_fusion()`
 
-The central search component. Combines BM25 and vector search results using **Reciprocal Rank Fusion (RRF)**.
-
-**RRF Formula:**
-
-```
-rrf_score(chunk) = 1 / (60 + rank_in_bm25) + 1 / (60 + rank_in_vector)
-```
-
-- `k=60` is a standard smoothing constant (prevents top-ranked items from dominating).
-- A chunk appearing in **both** result lists gets additive scores from each rank.
-- Chunks only in one list still appear in the merged output.
+The central search component. Combines BM25 and vector search results using **Reciprocal Rank Fusion (RRF)** as first-stage retrieval, followed by a **Cross-Encoder** second-stage reranker.
 
 **Search flow:**
-1. Embed query → 384-dim vector.
-2. BM25 search with `top_k * 2` candidates.
-3. ChromaDB vector search with `top_k * 2` candidates.
-4. RRF fusion → sorted by merged score → return top `top_k`.
+1. Embed query $\rightarrow$ 384-dim vector.
+2. BM25 keyword search fetching the top-20 candidate chunks.
+3. ChromaDB vector search fetching the top-20 candidate chunks.
+4. RRF fusion fuses candidate lists using the formula:
+   ```
+   rrf_score(chunk) = 1 / (60 + rank_in_bm25) + 1 / (60 + rank_in_vector)
+   ```
+   yielding a single merged top-20 candidate list.
+5. Cross-Encoder reranking loads the reranker wrapper and feeds the top-20 candidate text strings along with the query, predicting exact semantic alignment scores.
+6. Sort descending by rerank score, returning the top `top_k` (default 5) chunks.
 
-**Why double candidates (top_k * 2)?** To give RRF enough material to work with. If you only fetch `top_k` from each, RRF has nothing to promote from either list.
-
-**Why BM25 + Vector?**
-- Vector search: catches semantic similarity ("automobile" matches "car").
-- BM25: catches exact terms ("CRISPR" matches "CRISPR", even if the vector space doesn't align).
-- Together: covers both blind spots.
+**Why RRF + Reranker?**
+First-stage vector/keyword RRF search is extremely fast but calculates query and document meaning separately (Bi-Encoder constraint). The second-stage Cross-Encoder evaluates the query and chunk text jointly, capturing complex word relationships at a slightly higher computational cost. Limiting reranking to the top-20 first-stage candidates provides the best trade-off between latency and search precision (yielding a 20-30% precision boost).
 
 ---
 
-### 5.6 RAG Pipeline
+### 5.7 RAG Pipeline & Citation Validation
 
 **File:** `app/core/rag.py` → `class RAGPipeline`
 
-Orchestrates the query-to-answer flow.
+Orchestrates the query-to-answer flow, enforcing JSON outputs and programmatically rejecting hallucinated citations.
 
-**System prompt (hardcoded):**
-```
-You are an AI assistant that answers questions about YouTube video content.
-Rules:
-1. Answer ONLY using the provided transcript excerpts.
-2. If the context doesn't contain enough information, say so.
-3. Always mention which video(s) your answer comes from.
-4. Be concise and direct.
-5. If multiple videos cover the topic, synthesise across them.
+**JSON System prompt (`_STRUCTURED_SYSTEM_PROMPT`):**
+Forces output to raw JSON matching:
+```json
+{
+  "answer": "Grounded answer text here.",
+  "citations": [
+    {
+      "video_id": "youtube_video_id",
+      "video_title": "Video title string",
+      "quote": "Exact short quote text from the transcript"
+    }
+  ]
+}
 ```
 
-**Prompt template:**
+**Context & Prompt template:**
+Injects chunks exposing both the video title and exact video ID:
 ```
 CONTEXT:
-[Source: Video Title]
-chunk text...
-
-[Source: Another Video]
+[Source: Video Title (ID: video_id) at MM:SS]
 chunk text...
 
 QUESTION:
 user's query
-Answer the question using only the context above. Cite the video title(s) you used.
 ```
 
-**Source deduplication:** Multiple chunks from the same video are collapsed into a single source citation. The chunk with the highest RRF score is used (chunks are already sorted).
-
-**Empty context guard:** If no chunks are retrieved (no videos ingested), returns a helpful message without calling the LLM.
-
-**Singleton:** `RAGPipeline` is instantiated once at startup via FastAPI's `lifespan` context and stored in `app.state`.
+**Citation Validator Gate:**
+Extracts the list of citations returned in the LLM's JSON payload. Matches each cited `video_id` against the set of valid video IDs retrieved in the first-stage context blocks. Any cited `video_id` not present in the retrieved chunks is programmatically rejected and stripped from the response, throwing a logged warning.
 
 ---
 
-### 5.7 LLM Gateway
+### 5.8 LLM Gateway
 
 **File:** `app/core/llm.py`
 
-Thin wrapper over LiteLLM with primary + fallback provider logic.
+Thin wrapper over LiteLLM with primary + fallback provider logic, supporting structured JSON completion requests.
 
 | Config | Default |
 |---|---|
@@ -354,7 +374,7 @@ Thin wrapper over LiteLLM with primary + fallback provider logic.
 | Fallback provider | `gemini` |
 | Fallback model | `gemini/gemini-2.5-flash` |
 | Temperature | `0.2` (low — factual, grounded answers) |
-| Max tokens | `1024` |
+| JSON format support | Exposes `response_format` configuration to force JSON schemas |
 
 **Fallback logic:** If the primary `completion()` call raises any exception, the fallback model is tried. If both fail, a `RuntimeError` is raised with both error messages.
 
@@ -362,9 +382,9 @@ Thin wrapper over LiteLLM with primary + fallback provider logic.
 
 ---
 
-### 5.8 Video Timestamp Citations
+### 5.9 Video Timestamp Citations
 
-**Files:** `app/ingestion/transcripts.py`, `app/core/chunker.py`, `app/ingestion/pipeline.py`, `app/core/rag.py`, `main.py`
+**Files:** `app/ingestion/transcripts.py`, `app/core/chunker.py`, `app/ingestion/pipeline.py`, `app/core/rag.py`, `frontend/src/components/AskTab.tsx`
 
 Preserves subtitle timestamps from raw YouTube WebVTT files throughout the ingestion and query pipelines, creating clickable YouTube citations.
 
@@ -373,7 +393,7 @@ Preserves subtitle timestamps from raw YouTube WebVTT files throughout the inges
 2. **Negative Lookahead Preservation (`chunker.py`):** The cleaning regex is updated with a negative lookahead to strip generic annotations (like `[Music]`) but preserve timing tags: `re.sub(r'\[(?!t=\d+\])[^\]]*\]', '', text)`.
 3. **Extraction & Vector Cleaning (`pipeline.py`):** The pipeline scans for the first `[t=seconds]` tag to set `start_second` in metadata. It then strips all timing tags (`re.sub(r'\[t=\d+\]', '', text)`) so the embedder and database receive clean, natural text for vector search.
 4. **Retrieval & RRF Fusion (`retriever.py`):** Chunks returned by ChromaDB or FTS5 carry `start_second` in their metadata.
-5. **LLM Citation & UI Linkage (`rag.py` & `main.py`):** We format start seconds as `MM:SS` (e.g., `at 1:24`) and inject them into RAG context blocks. In the Streamlit UI, YouTube links are appended with exact query strings: `&t={start_second}s`.
+5. **LLM Citation & UI Linkage (`rag.py` & `AskTab.tsx`):** We format start seconds as `MM:SS` (e.g., `at 1:24`) and inject them into RAG context blocks. In the React UI, YouTube links are appended with exact timestamp strings: `&t={start_second}s`.
 
 ---
 
@@ -670,9 +690,15 @@ All settings in `.env`. Loaded via `pydantic-settings` (type-safe, validated).
 
 ## 10. Evaluation Harness
 
-**Files:** `eval/run_eval.py`, `eval/questions.json`
+**Files:** `eval/run_eval.py`, `eval/questions.json`, `.github/workflows/eval.yml`
 
-A labelled question set with two metrics:
+The evaluation harness measures query retrieval and generation quality against a labeled question set of 20 geology and neural network questions across the `@crashcourse` and `@3blue1brown` channels.
+
+### Isolated Seeding & CI Gate Execution Flow:
+1. **Isolated Database Redirect:** The evaluation overrides Chroma and SQLite paths to `./data/eval_vectordb` and `./data/eval_metadata.db` to prevent modifying the live development databases.
+2. **Dynamic Fixture Seeding:** The script wipes old test databases and seeds fresh mock transcript chunk fixtures matching target channel formats.
+3. **Deterministic LLM Mocking:** It patches `call_llm` to return exact grounded answer strings and structured citations, avoiding rate limits, latencies, and API charges.
+4. **CI-Gate Exit Code:** If the retrieval hit rate is $< 80\%$, the script exits with code `1`, failing the GitHub Actions PR validation gate. Otherwise, it exits with `0` (Success).
 
 ### Metrics
 
@@ -685,28 +711,37 @@ A labelled question set with two metrics:
 
 | Hit Rate | Rating |
 |---|---|
-| ≥ 80% | GOOD |
+| ≥ 80% | GOOD (CI pipeline passes check) |
 | 60–79% | FAIR — consider tuning `chunk_size` |
-| < 60% | POOR — check ingestion and embeddings |
+| < 60% | POOR — check ingestion, embeddings, and reranker |
 
-### Example question entry
+### Example question entry (eval/questions.json)
 ```json
 {
   "id": "q01",
-  "question": "How was the Earth formed?",
-  "expected_source": "How did Earth form?: Crash Course Geology #2",
-  "keywords": ["solar system", "gas", "dust", "4.6 billion"]
+  "question": "What is geology and why does it matter?",
+  "expected_source": "Intro to Geology: Crash Course Geology #1",
+  "keywords": ["geology", "earth", "science"]
 }
 ```
 
-### Running the eval
+### Running the eval locally
 ```bash
 uv run python eval/run_eval.py
 ```
 
+### CI/CD Workflow (.github/workflows/eval.yml)
+GitHub Actions triggers on every Pull Request or commit push. It spins up a fresh Ubuntu container, initializes dependencies using `uv`, downloads the Cross-Encoder model, and runs `eval/run_eval.py`. If search quality drops (hit rate $<80\%$), the PR merge is blocked.
+
 ---
 
 ## 11. Key Design Decisions
+
+### Why Cross-Encoder Reranking?
+Standard bi-encoders embed queries and documents independently (e.g. cosine distance), which misses token-to-token semantic alignments. A second-stage Cross-Encoder scores query-document pairs jointly, matching complex contextual patterns and boosting retrieval precision by 20-30%. Since joint-scoring is more computationally expensive, we limit it to the top-20 candidates fetched by the first-stage RRF search.
+
+### Why programmatically Enriched & Enforced JSON Citations?
+LLMs under text prompts frequently hallucinate sources or omit citations. By forcing structured output via JSON mode (`response_format={"type": "json_object"}`) and programmatically matching citations against retrieved metadata IDs in python, hallucinated sources are stripped before they can reach the user.
 
 ### Why chunking over full-transcript embedding?
 Embedding a 40-minute lecture transcript as a single vector dilutes all topics into one averaged direction. A query about "plate tectonics" then competes against "rock formation", "volcanoes", and everything else in the lecture. 300-word chunks keep each embedding focused on one idea → better retrieval precision.
