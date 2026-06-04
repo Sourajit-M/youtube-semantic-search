@@ -1,74 +1,22 @@
-import { useState, useEffect } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { AskTab } from "./components/AskTab";
 import { ChannelsTab } from "./components/ChannelsTab";
-
-interface Channel {
-  youtube_id: string;
-  name: string;
-  url: string;
-  last_checked_at: string | null;
-  created_at: string;
-}
-
-interface Health {
-  status: string;
-  chunks_indexed: number;
-  channels_tracked: number;
-  active_llm: string;
-}
-
-const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "http://localhost:8000" : "");
+import { useRagState } from "./hooks/useRagState";
 
 function App() {
-  const [activeTab, setActiveTab] = useState<"ask" | "channels">("ask");
-  const [selectedChannel, setSelectedChannel] = useState<string>("All channels");
-  const [topK, setTopK] = useState<number>(5);
-  const [health, setHealth] = useState<Health | null>(null);
-  const [channels, setChannels] = useState<Channel[]>([]);
-
-  const fetchHealth = async () => {
-    try {
-      const response = await fetch(`${API_URL}/health`, { method: "GET" });
-      if (!response.ok) throw new Error("Health check failure");
-      const data = await response.json();
-      setHealth(data);
-    } catch (err) {
-      console.warn("Backend offline:", err);
-      setHealth(null);
-    }
-  };
-
-  const fetchChannels = async () => {
-    try {
-      const response = await fetch(`${API_URL}/channels`, { method: "GET" });
-      if (!response.ok) throw new Error("Failed to load channel lists");
-      const data = await response.json();
-      setChannels(data);
-    } catch (err) {
-      console.warn("Could not retrieve channel registries:", err);
-      setChannels([]);
-    }
-  };
-
-  // Run initial polling & tickers setup
-  useEffect(() => {
-    fetchHealth();
-    fetchChannels();
-
-    const ticker = setInterval(() => {
-      fetchHealth();
-    }, 15000); // Poll health every 15s
-
-    return () => clearInterval(ticker);
-  }, []);
-
-  // Fetch channels when tab changes to ensure active synchronization
-  useEffect(() => {
-    if (activeTab === "channels") {
-      fetchChannels();
-    }
-  }, [activeTab]);
+  const {
+    activeTab,
+    setActiveTab,
+    selectedChannel,
+    setSelectedChannel,
+    topK,
+    setTopK,
+    health,
+    channels,
+    fetchChannels,
+    fetchHealth,
+    apiUrl,
+  } = useRagState();
 
   return (
     <div className="h-screen w-screen bg-slate-950 text-slate-100 flex overflow-hidden font-sans select-none antialiased">
@@ -94,14 +42,14 @@ function App() {
           <AskTab
             selectedChannel={selectedChannel}
             topK={topK}
-            apiUrl={API_URL}
+            apiUrl={apiUrl}
           />
         ) : (
           <ChannelsTab
             channels={channels}
             fetchChannels={fetchChannels}
             fetchHealth={fetchHealth}
-            apiUrl={API_URL}
+            apiUrl={apiUrl}
           />
         )}
       </main>

@@ -10,6 +10,7 @@ cookies.txt
 local_ingest.py
 rebuild_data.py
 temp_data.zip
+data.zip
 
 # Python
 __pycache__/
@@ -24,5 +25,9 @@ __pycache__/
 .vscode/
 .idea/
 
+# Fallow
+.fallow/
+
 # OS
 .DS_Store
+
