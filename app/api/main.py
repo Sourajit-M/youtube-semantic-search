@@ -22,9 +22,6 @@ async def lifespan(app : FastAPI):
   retriever = HybridRetriever()
   retriever.load_or_build_bm25()
 
-  from app.core.reranker import get_reranker
-  get_reranker()
-
   rag_pipeline = RAGPipeline(retriever=retriever)
 
   # Store on app.state — accessible in all route handlers via req.app.state

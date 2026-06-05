@@ -233,13 +233,13 @@ Wraps FastEmbed's ONNX runtime embedding model.
 
 **File:** `app/core/reranker.py`
 
-A Cross-Encoder model wrapper using sentence-transformers to score query-chunk pairs jointly.
+A Cross-Encoder model wrapper using FastEmbed's TextCrossEncoder (ONNX) to score query-chunk pairs jointly.
 
 | Property | Value |
 |---|---|
-| Model | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
+| Model | `Xenova/ms-marco-MiniLM-L-6-v2` |
 | RAM | ~80 MB |
-| Runtime | PyTorch/sentence-transformers |
+| Runtime | ONNX (CPU-only, no PyTorch) |
 
 **Key methods:**
 - `score(query: str, texts: list[str]) → list[float]` — scores each candidate chunk's relevance to the query. Higher scores indicate higher semantic alignment.
@@ -731,7 +731,7 @@ uv run python eval/run_eval.py
 ```
 
 ### CI/CD Workflow (.github/workflows/eval.yml)
-GitHub Actions triggers on every Pull Request or commit push. It spins up a fresh Ubuntu container, initializes dependencies using `uv`, downloads the Cross-Encoder model, and runs `eval/run_eval.py`. If search quality drops (hit rate $<80\%$), the PR merge is blocked.
+GitHub Actions triggers on every Pull Request or commit push. It spins up a fresh Ubuntu container, initializes dependencies using `uv`, utilizes workflow caching for models to avoid redundant downloads, routes model requests to the official Hugging Face mirror to avoid rate limits, and runs `eval/run_eval.py`. If search quality drops (hit rate $<80\%$), the PR merge is blocked.
 
 ---
 
@@ -758,10 +758,11 @@ Provider lock-in is a production risk. LiteLLM provides one `completion()` inter
 Celery requires a Redis broker — operational overhead for hourly polling. APScheduler runs in-process in a daemon thread. The upgrade path to Celery is straightforward if throughput demands it.
 
 ### Why FastEmbed over sentence-transformers?
-- ONNX runtime: ~200 MB RAM vs ~2 GB for PyTorch.
-- Same model weights (`all-MiniLM-L6-v2`), identical vectors.
+- ONNX runtime: ~200 MB RAM (Embedder + Reranker combined) vs ~2 GB for PyTorch.
+- Same model weights (`all-MiniLM-L6-v2` and `ms-marco-MiniLM-L-6-v2`), identical vectors/scores.
 - CPU-only: works on any free cloud tier without GPU.
 - Faster cold start — critical for API startup time.
+- Allows complete removal of PyTorch and Transformers from dependencies, reducing Docker image size and build times.
 
 ### Why SQLite over PostgreSQL?
 Local-first, zero-infrastructure metadata store. SQLModel (SQLAlchemy under the hood) provides a clean migration path to PostgreSQL for production with minimal code changes.

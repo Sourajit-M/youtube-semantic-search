@@ -4,8 +4,6 @@ import pickle
 from pathlib import Path
 from typing import Optional
 
-from rank_bm25 import BM25Okapi
-
 from app.config import get_settings
 from app.core.embedder import get_embedder
 from app.db.vectordb import ChunkResult, VectorDB
